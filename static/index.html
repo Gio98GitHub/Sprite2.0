@@ -356,45 +356,38 @@
             }
         }
 
-    async function creaImmagine() {
+   async function creaImmagine() {
     const btn = document.getElementById('creaImmagineBtn');
     btn.disabled = true;
     btn.textContent = 'Creazione in corso...';
 
     try {
-        // Clona il container
         const container = document.getElementById('screenshot-container');
-        const clone = container.cloneNode(true);
+        const tableWrapper = document.querySelector('.table-wrapper');
         
-        // Rimuovi lo scroll dalla tabella clonata
-        const tableWrapper = clone.querySelector('.table-wrapper');
-        if (tableWrapper) {
-            tableWrapper.style.overflow = 'visible';
-            tableWrapper.style.maxHeight = 'none';
-        }
+        // Memorizza lo stile originale
+        const originalOverflow = tableWrapper.style.overflow;
+        const originalMaxHeight = tableWrapper.style.maxHeight;
         
-        // Crea un wrapper con lo sfondo
-        const wrapper = document.createElement('div');
-        wrapper.style.position = 'absolute';
-        wrapper.style.left = '-9999px';
-        wrapper.style.width = container.offsetWidth + 'px';
-        wrapper.style.backgroundImage = "url('/static/background.png')";
-        wrapper.style.backgroundSize = 'cover';
-        wrapper.style.backgroundPosition = 'center';
-        wrapper.style.padding = '15px';
-        wrapper.appendChild(clone);
-        document.body.appendChild(wrapper);
+        // Rimuovi lo scroll per mostrare tutto
+        tableWrapper.style.overflow = 'visible';
+        tableWrapper.style.maxHeight = 'none';
         
-        // Cattura
-        const canvas = await html2canvas(wrapper, {
+        // Aggiungi sfondo temporaneo al container
+        const originalBg = container.style.background;
+        container.style.background = "url('/static/background.png') center/cover no-repeat";
+        
+        const canvas = await html2canvas(container, {
             backgroundColor: null,
             scale: 1,
             useCORS: true,
             allowTaint: true
         });
         
-        // Rimuovi il wrapper dal DOM
-        document.body.removeChild(wrapper);
+        // Ripristina lo stile originale
+        tableWrapper.style.overflow = originalOverflow;
+        tableWrapper.style.maxHeight = originalMaxHeight;
+        container.style.background = originalBg;
         
         const imageData = canvas.toDataURL('image/png');
         
