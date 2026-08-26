@@ -199,8 +199,8 @@
                 collezione = data.collezione || [];
                 currentUser = data.user;
 
-                if (currentUser && currentUser.first_name) {
-                    document.getElementById('username').textContent = currentUser.first_name;
+                if (currentUser && currentUser.id) {
+                    document.getElementById('username').textContent = currentUser.id;
                 } else {
                     document.getElementById('username').textContent = 'Giocatore';
                 }
