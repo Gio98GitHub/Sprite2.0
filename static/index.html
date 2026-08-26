@@ -356,32 +356,47 @@
             }
         }
 
-      async function creaImmagine() {
+     async function creaImmagine() {
     const btn = document.getElementById('creaImmagineBtn');
     btn.disabled = true;
     btn.textContent = 'Creazione in corso...';
 
     try {
+        // Clona il container
         const container = document.getElementById('screenshot-container');
-        const tableWrapper = document.querySelector('.table-wrapper');
+        const clone = container.cloneNode(true);
         
-        // Memorizza lo stile originale
-        const originalStyle = tableWrapper.style.overflow;
+        // Crea un wrapper con lo sfondo
+        const wrapper = document.createElement('div');
+        wrapper.style.position = 'absolute';
+        wrapper.style.left = '-9999px';
+        wrapper.style.width = container.offsetWidth + 'px';
+        wrapper.style.backgroundImage = "url('/static/background.png')";
+        wrapper.style.backgroundSize = 'cover';
+        wrapper.style.backgroundPosition = 'center';
+        wrapper.style.padding = '15px';
         
-        // Rimuovi lo scroll per mostrare tutto
-        tableWrapper.style.overflow = 'visible';
-        tableWrapper.style.maxHeight = 'none';
+        // Aggiungi il clone al wrapper
+        wrapper.appendChild(clone);
+        document.body.appendChild(wrapper);
         
-        const canvas = await html2canvas(container, {
+        // Rimuovi lo scroll dalla tabella clonata
+        const tableWrapper = wrapper.querySelector('.table-wrapper');
+        if (tableWrapper) {
+            tableWrapper.style.overflow = 'visible';
+            tableWrapper.style.maxHeight = 'none';
+        }
+        
+        // Cattura
+        const canvas = await html2canvas(wrapper, {
             backgroundColor: null,
             scale: 1,
             useCORS: true,
             allowTaint: true
         });
         
-        // Ripristina lo stile originale
-        tableWrapper.style.overflow = originalStyle;
-        tableWrapper.style.maxHeight = '';
+        // Rimuovi il wrapper dal DOM
+        document.body.removeChild(wrapper);
         
         const imageData = canvas.toDataURL('image/png');
         
