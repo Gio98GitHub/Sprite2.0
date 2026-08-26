@@ -356,42 +356,46 @@
             }
         }
 
-        async function creaImmagine() {
-            const btn = document.getElementById('creaImmagineBtn');
-            btn.disabled = true;
-            btn.textContent = 'Creazione in corso...';
+       async function creaImmagine() {
+    const btn = document.getElementById('creaImmagineBtn');
+    btn.disabled = true;
+    btn.textContent = 'Creazione in corso...';
 
-            try {
-                const container = document.getElementById('screenshot-container');
-                const canvas = await html2canvas(container, {
-                    backgroundColor: null,
-                    scale: 1,
-                    useCORS: true
-                });
-                
-                const imageData = canvas.toDataURL('image/png');
-                
-                const res = await fetch('/api/invia-screenshot', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        screenshot: imageData,
-                        initData: tg.initData || initData
-                    })
-                });
+    try {
+        const container = document.getElementById('screenshot-container');
+        const canvas = await html2canvas(container, {
+            backgroundColor: null,
+            scale: 1,
+            useCORS: true,
+            allowTaint: true,
+            scrollY: -window.scrollY,
+            scrollX: -window.scrollX,
+            windowHeight: container.scrollHeight
+        });
+        
+        const imageData = canvas.toDataURL('image/png');
+        
+        const res = await fetch('/api/invia-screenshot', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                screenshot: imageData,
+                initData: tg.initData || initData
+            })
+        });
 
-                if (!res.ok) throw new Error('Errore invio');
-                
-                const data = await res.json();
-                mostraErrore('✓ Screenshot inviato nella chat!');
-                
-            } catch (e) {
-                mostraErrore('Errore: ' + e.message);
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Crea Immagine';
-            }
-        }
+        if (!res.ok) throw new Error('Errore invio');
+        
+        const data = await res.json();
+        mostraErrore('✓ Screenshot inviato nella chat!');
+        
+    } catch (e) {
+        mostraErrore('Errore: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Crea Immagine';
+    }
+}
 
         function mostraErrore(msg) {
             const errorDiv = document.getElementById('error');
