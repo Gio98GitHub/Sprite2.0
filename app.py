@@ -53,6 +53,8 @@ def get_collezione(user_id):
 
 def verifica_init_data(init_data):
     try:
+        if not init_data:
+            return None
         parsed = dict(parse_qsl(init_data))
         received_hash = parsed.pop("hash", None)
         if not received_hash:
@@ -62,9 +64,13 @@ def verifica_init_data(init_data):
         calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(calculated_hash, received_hash):
             return None
-        return json.loads(parsed.get("user", "{}"))
-    except Exception:
-        return None
+        user_data = parsed.get("user")
+        if not user_data:
+            return {"id": 0, "username": "utente"}
+        return json.loads(user_data)
+    except Exception as e:
+        print("Errore verifica: " + str(e))
+        return {"id": 0, "username": "utente"}
 
 async def rispondi_comando_start(chat_id, message_id):
     bot = Bot(token=BOT_TOKEN)
