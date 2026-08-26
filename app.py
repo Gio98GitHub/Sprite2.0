@@ -44,12 +44,16 @@ def elimina_spiritello(user_id, spiritello, variante):
     return deleted
 
 def get_collezione(user_id):
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("SELECT spiritello, variante FROM collezione WHERE user_id = %s", (user_id,))
-    rows = c.fetchall()
-    conn.close()
-    return [{"spiritello": r[0], "variante": r[1]} for r in rows]
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT spiritello, variante FROM collezione WHERE user_id = %s", (user_id,))
+        rows = c.fetchall()
+        conn.close()
+        return [{"spiritello": r[0], "variante": r[1]} for r in rows]
+    except Exception as e:
+        print("Errore get_collezione: " + str(e))
+        return []
 
 def verifica_init_data(init_data):
     try:
