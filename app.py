@@ -9,8 +9,13 @@ from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 import asyncio
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from PIL import Image, ImageDraw, ImageFont
-from io import BytesIO
+
+try:
+    from PIL import Image, ImageDraw, ImageFont
+except ImportError:
+    Image = None
+    ImageDraw = None
+    ImageFont = None
 
 app = Flask(__name__, static_folder="static")
 
@@ -77,57 +82,6 @@ def verifica_init_data(init_data):
     except Exception as e:
         print("Errore verifica: " + str(e))
         return {"id": 0, "username": "utente"}
-
-def genera_immagine_collezione(user, collezione):
-    larghezza = 700
-    riga_altezza = 60
-    header_altezza = 100
-    altezza = header_altezza + riga_altezza * len(SPIRITELLI)
-
-    img = Image.new("RGB", (larghezza, altezza), (10, 10, 40))
-    draw = ImageDraw.Draw(img)
-
-    try:
-        font_titolo = ImageFont.truetype("static/font_titolo.ttf", 36)
-        font_testo = ImageFont.truetype("static/font_testo.ttf", 20)
-        font_piccolo = ImageFont.truetype("static/font_testo.ttf", 14)
-    except Exception:
-        font_titolo = ImageFont.load_default()
-        font_testo = ImageFont.load_default()
-        font_piccolo = ImageFont.load_default()
-
-    nome = user.get("first_name", "Giocatore")
-    draw.text((20, 15), "SpriteBot 2.0", font=font_titolo, fill=(255, 0, 255))
-    draw.text((20, 60), "Collezione di " + nome, font=font_piccolo, fill=(0, 255, 255))
-
-    col_larghezza = (larghezza - 150) // len(VARIANTI)
-    for i, variante in enumerate(VARIANTI):
-        x = 150 + i * col_larghezza
-        draw.text((x + 10, header_altezza - 25), variante, font=font_piccolo, fill=(0, 255, 255))
-
-    for riga, spiritello in enumerate(SPIRITELLI):
-        y = header_altezza + riga * riga_altezza
-        draw.text((15, y + 18), spiritello, font=font_testo, fill=(255, 0, 255))
-
-        for i, variante in enumerate(VARIANTI):
-            x = 150 + i * col_larghezza
-            possiede = any(s["spiritello"] == spiritello and s["variante"] == variante for s in collezione)
-            colore = (0, 220, 0) if possiede else (40, 40, 60)
-            draw.rectangle([x + 10, y + 8, x + 10 + 44, y + 8 + 44], fill=colore, outline=(0, 255, 255))
-
-    buffer = BytesIO()
-    img.save(buffer, format="PNG")
-    buffer.seek(0)
-    return buffer
-
-async def invia_foto_collezione(chat_id, immagine):
-    bot = Bot(token=BOT_TOKEN)
-    try:
-        await bot.send_photo(chat_id=chat_id, photo=immagine, caption="La mia collezione di Spiritelli!")
-        return True
-    except Exception as e:
-        print("Errore invio foto: " + str(e))
-        return False
 
 async def rispondi_comando_start(chat_id, message_id):
     bot = Bot(token=BOT_TOKEN)
@@ -224,26 +178,6 @@ def api_toggle():
         return jsonify({"ok": ok, "azione": azione})
     except Exception as e:
         print("Errore toggle: " + str(e))
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/api/condividi", methods=["POST"])
-@limiter.limit("5 per minute")
-def api_condividi():
-    try:
-        body = request.get_json()
-        user = verifica_init_data(body.get("initData", ""))
-        if not user or user.get("id") == 0:
-            return jsonify({"error": "non autorizzato"}), 401
-
-        collezione = get_collezione(user["id"])
-        immagine = genera_immagine_collezione(user, collezione)
-        ok = asyncio.run(invia_foto_collezione(user["id"], immagine))
-
-        if not ok:
-            return jsonify({"error": "invio fallito"}), 500
-        return jsonify({"ok": True})
-    except Exception as e:
-        print("Errore condividi: " + str(e))
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
