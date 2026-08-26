@@ -356,7 +356,7 @@
             }
         }
 
-     async function creaImmagine() {
+    async function creaImmagine() {
     const btn = document.getElementById('creaImmagineBtn');
     btn.disabled = true;
     btn.textContent = 'Creazione in corso...';
@@ -365,6 +365,13 @@
         // Clona il container
         const container = document.getElementById('screenshot-container');
         const clone = container.cloneNode(true);
+        
+        // Rimuovi lo scroll dalla tabella clonata
+        const tableWrapper = clone.querySelector('.table-wrapper');
+        if (tableWrapper) {
+            tableWrapper.style.overflow = 'visible';
+            tableWrapper.style.maxHeight = 'none';
+        }
         
         // Crea un wrapper con lo sfondo
         const wrapper = document.createElement('div');
@@ -375,17 +382,8 @@
         wrapper.style.backgroundSize = 'cover';
         wrapper.style.backgroundPosition = 'center';
         wrapper.style.padding = '15px';
-        
-        // Aggiungi il clone al wrapper
         wrapper.appendChild(clone);
         document.body.appendChild(wrapper);
-        
-        // Rimuovi lo scroll dalla tabella clonata
-        const tableWrapper = wrapper.querySelector('.table-wrapper');
-        if (tableWrapper) {
-            tableWrapper.style.overflow = 'visible';
-            tableWrapper.style.maxHeight = 'none';
-        }
         
         // Cattura
         const canvas = await html2canvas(wrapper, {
