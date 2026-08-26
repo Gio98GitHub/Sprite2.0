@@ -126,12 +126,16 @@ def api_spiritelli():
 @app.route("/api/collezione", methods=["POST"])
 @limiter.limit("30 per minute")
 def api_collezione():
-    body = request.get_json()
-    user = verifica_init_data(body.get("initData", ""))
-    if not user:
-        return jsonify({"error": "non autorizzato"}), 401
-    collezione = get_collezione(user["id"])
-    return jsonify({"collezione": collezione})
+    try:
+        body = request.get_json()
+        user = verifica_init_data(body.get("initData", ""))
+        if not user:
+            return jsonify({"error": "non autorizzato"}), 401
+        collezione = get_collezione(user["id"])
+        return jsonify({"collezione": collezione})
+    except Exception as e:
+        print("Errore: " + str(e))
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/toggle", methods=["POST"])
 @limiter.limit("20 per minute")
