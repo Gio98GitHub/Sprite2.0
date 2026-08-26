@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SpriteBot 2.0</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -35,6 +36,7 @@
             margin: 0 auto;
             position: relative;
             z-index: 2;
+            padding-bottom: 80px;
         }
         
         .header {
@@ -67,6 +69,7 @@
             box-shadow: 0 0 30px rgba(255, 0, 255, 0.5), 0 0 60px rgba(0, 255, 255, 0.3);
             padding: 10px;
             border: 2px solid rgba(255, 0, 255, 0.3);
+            margin-bottom: 20px;
         }
         
         table {
@@ -155,6 +158,46 @@
             box-shadow: 0 0 25px rgba(0, 255, 0, 1);
         }
         
+        .button-container {
+            position: fixed;
+            bottom: 15px;
+            left: 15px;
+            right: 15px;
+            z-index: 10;
+        }
+        
+        .crea-immagine-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #00ff00 0%, #00cc00 100%);
+            border: 2px solid #00ff00;
+            border-radius: 10px;
+            color: #000;
+            font-size: 16px;
+            font-weight: 700;
+            font-family: 'Fredoka', sans-serif;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.8);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .crea-immagine-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(0, 255, 0, 1);
+        }
+        
+        .crea-immagine-btn:active {
+            transform: scale(0.98);
+        }
+        
+        .crea-immagine-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: scale(1);
+        }
+        
         .loading {
             text-align: center;
             padding: 40px;
@@ -174,30 +217,10 @@
             font-family: 'Fredoka', sans-serif;
             color: #ff6666;
         }
-
-        .condividi-btn {
-            margin-top: 15px;
-            width: 100%;
-            padding: 14px;
-            font-family: 'Fredoka', sans-serif;
-            font-weight: 700;
-            font-size: 16px;
-            background: linear-gradient(135deg, #ff00ff, #00ffff);
-            border: none;
-            border-radius: 10px;
-            color: #000;
-            cursor: pointer;
-            transition: opacity 0.2s ease;
-        }
-
-        .condividi-btn:disabled {
-            opacity: 0.6;
-            cursor: default;
-        }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container" id="screenshot-container">
         <div class="header">
             <h1>SpriteBot 2.0</h1>
             <div class="subtitle">Collezione di <span id="username">...</span></div>
@@ -217,12 +240,12 @@
                 <tbody id="table-body"></tbody>
             </table>
         </div>
-
-        <button id="condividi-btn" class="condividi-btn" onclick="condividi()">
-            📸 Manda la mia collezione in chat
-        </button>
         
         <div id="error" class="error" style="display: none;"></div>
+    </div>
+
+    <div class="button-container">
+        <button class="crea-immagine-btn" id="creaImmagineBtn">Crea Immagine</button>
     </div>
 
     <script>
@@ -254,8 +277,8 @@
                 collezione = data.collezione || [];
                 currentUser = data.user;
 
-                if (currentUser && currentUser.id) {
-                    document.getElementById('username').textContent = currentUser.id;
+                if (currentUser && currentUser.first_name) {
+                    document.getElementById('username').textContent = currentUser.first_name;
                 } else {
                     document.getElementById('username').textContent = 'Giocatore';
                 }
@@ -333,24 +356,40 @@
             }
         }
 
-        async function condividi() {
-            const btn = document.getElementById('condividi-btn');
+        async function creaImmagine() {
+            const btn = document.getElementById('creaImmagineBtn');
             btn.disabled = true;
-            btn.textContent = 'Invio in corso...';
+            btn.textContent = 'Creazione in corso...';
+
             try {
-                const res = await fetch('/api/condividi', {
+                const container = document.getElementById('screenshot-container');
+                const canvas = await html2canvas(container, {
+                    backgroundColor: null,
+                    scale: 1,
+                    useCORS: true
+                });
+                
+                const imageData = canvas.toDataURL('image/png');
+                
+                const res = await fetch('/api/invia-screenshot', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ initData: tg.initData || initData })
+                    body: JSON.stringify({
+                        screenshot: imageData,
+                        initData: tg.initData || initData
+                    })
                 });
-                if (!res.ok) throw new Error('Invio fallito');
-                btn.textContent = '✓ Inviato in chat!';
-                if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+
+                if (!res.ok) throw new Error('Errore invio');
+                
+                const data = await res.json();
+                mostraErrore('✓ Screenshot inviato nella chat!');
+                
             } catch (e) {
                 mostraErrore('Errore: ' + e.message);
-                btn.textContent = '📸 Manda la mia collezione in chat';
             } finally {
                 btn.disabled = false;
+                btn.textContent = 'Crea Immagine';
             }
         }
 
@@ -360,7 +399,10 @@
             errorDiv.style.display = 'block';
         }
 
+        document.getElementById('creaImmagineBtn').addEventListener('click', creaImmagine);
+
         carica();
     </script>
 </body>
 </html>
+
