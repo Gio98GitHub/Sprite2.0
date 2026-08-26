@@ -134,9 +134,16 @@ def api_spiritelli():
 def api_collezione():
     try:
         body = request.get_json()
-        user = verifica_init_data(body.get("initData", ""))
-        if not user:
-            return jsonify({"error": "non autorizzato"}), 401
+        init_data = body.get("initData", "")
+        print("DEBUG initData ricevuto:", init_data)
+        print("DEBUG length:", len(init_data))
+        
+        user = verifica_init_data(init_data)
+        print("DEBUG user:", user)
+        
+        if not user or user.get("id") == 0:
+            return jsonify({"error": "non autorizzato", "debug": "user not found"}), 401
+        
         collezione = get_collezione(user["id"])
         return jsonify({"collezione": collezione})
     except Exception as e:
