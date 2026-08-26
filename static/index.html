@@ -5,19 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SpriteBot 2.0</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         
         body {
-            font-family: 'Bangers', cursive;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #fff;
+            font-family: 'Fredoka', sans-serif;
+            background: url('/static/background.png') center/cover no-repeat fixed;
             min-height: 100vh;
             padding: 15px;
+            color: #fff;
+            position: relative;
         }
         
-        .container { max-width: 100%; margin: 0 auto; }
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 20, 0.3);
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            position: relative;
+            z-index: 2;
+        }
         
         .header {
             text-align: center;
@@ -28,47 +46,51 @@
             font-family: 'Bangers', cursive;
             font-size: 48px;
             font-weight: 700;
-            text-shadow: 3px 3px 0px rgba(0,0,0,0.5);
+            text-shadow: 3px 3px 0px rgba(255, 0, 255, 0.8), 6px 6px 0px rgba(0, 255, 255, 0.6);
             margin-bottom: 5px;
             letter-spacing: 2px;
         }
         
         .subtitle {
-            font-size: 18px;
-            color: rgba(255,255,255,0.9);
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.95);
             margin-bottom: 5px;
             font-weight: 600;
-            font-family: 'Bangers', cursive;
+            font-family: 'Fredoka', sans-serif;
+            text-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
         }
         
         .table-wrapper {
-            background: rgba(0,0,0,0.1);
+            background: rgba(0, 0, 0, 0.7);
             border-radius: 15px;
             overflow-x: auto;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            box-shadow: 0 0 30px rgba(255, 0, 255, 0.5), 0 0 60px rgba(0, 255, 255, 0.3);
             padding: 10px;
+            border: 2px solid rgba(255, 0, 255, 0.3);
         }
         
         table {
             width: 100%;
             border-collapse: collapse;
-            background: rgba(255,255,255,0.05);
+            background: rgba(10, 10, 40, 0.8);
             min-width: 600px;
         }
         
         thead {
-            background: rgba(0,0,0,0.2);
+            background: rgba(255, 0, 255, 0.2);
             position: sticky;
             top: 0;
+            border-bottom: 2px solid rgba(0, 255, 255, 0.5);
         }
         
         th {
             padding: 12px 8px;
             text-align: center;
             font-weight: 700;
-            border-bottom: 2px solid rgba(255,255,255,0.1);
             font-size: 11px;
-            font-family: 'Bangers', cursive;
+            font-family: 'Fredoka', sans-serif;
+            color: #00ffff;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
         }
         
         th:first-child {
@@ -78,26 +100,27 @@
         td {
             padding: 12px 8px;
             text-align: center;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
+            border-bottom: 1px solid rgba(255, 0, 255, 0.1);
         }
         
         td:first-child {
             text-align: left;
             font-weight: 600;
             min-width: 100px;
-            font-family: 'Bangers', cursive;
+            font-family: 'Fredoka', sans-serif;
+            color: #ff00ff;
         }
         
         tr:hover {
-            background: rgba(255,255,255,0.08);
+            background: rgba(255, 0, 255, 0.1);
         }
         
         .sprite-box {
             width: 70px;
             height: 70px;
             margin: 0 auto;
-            background: rgba(255,255,255,0.1);
-            border: 2px solid rgba(255,255,255,0.2);
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid rgba(0, 255, 255, 0.5);
             border-radius: 8px;
             display: flex;
             align-items: center;
@@ -109,9 +132,10 @@
         }
         
         .sprite-box:hover {
-            border-color: rgba(255,255,255,0.5);
-            background: rgba(255,255,255,0.15);
+            border-color: rgba(255, 0, 255, 0.8);
+            background: rgba(255, 0, 255, 0.1);
             transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(255, 0, 255, 0.6);
         }
         
         .sprite-box img {
@@ -124,24 +148,46 @@
         .sprite-box.active {
             background: linear-gradient(135deg, #00ff00 0%, #00cc00 100%);
             border-color: #00ff00;
-            box-shadow: 0 0 20px rgba(0,255,0,0.8);
+            box-shadow: 0 0 25px rgba(0, 255, 0, 1);
+        }
+        
+        .sprite-box.active::after {
+            content: "✓";
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #00ff00;
+            color: #000;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 16px;
+            border: 2px solid #fff;
         }
         
         .loading {
             text-align: center;
             padding: 40px;
             font-size: 16px;
-            font-family: 'Bangers', cursive;
+            font-family: 'Fredoka', sans-serif;
+            color: #00ffff;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
         }
         
         .error {
-            background: rgba(255,100,100,0.3);
+            background: rgba(255, 0, 0, 0.3);
             padding: 12px;
             border-radius: 10px;
             margin: 15px 0;
-            border-left: 4px solid #ff6464;
+            border-left: 4px solid #ff0000;
+            border: 2px solid rgba(255, 0, 0, 0.6);
             font-size: 14px;
-            font-family: 'Bangers', cursive;
+            font-family: 'Fredoka', sans-serif;
+            color: #ff6666;
         }
     </style>
 </head>
