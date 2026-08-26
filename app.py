@@ -157,24 +157,27 @@ def api_collezione():
 @app.route("/api/toggle", methods=["POST"])
 @limiter.limit("20 per minute")
 def api_toggle():
-    body = request.get_json()
-    user = verifica_init_data(body.get("initData", ""))
-    if not user:
-        return jsonify({"error": "non autorizzato"}), 401
-    spiritello = body.get("spiritello")
-    variante = body.get("variante")
-    if spiritello not in SPIRITELLI or variante not in VARIANTI:
-        return jsonify({"error": "dati non validi"}), 400
-    username = user.get("username", "utente")
-    collezione = get_collezione(user["id"])
-    esiste = any(s["spiritello"] == spiritello and s["variante"] == variante for s in collezione)
-    if esiste:
-        ok = elimina_spiritello(user["id"], spiritello, variante)
-        azione = "rimosso"
-    else:
-        ok = aggiungi_spiritello(user["id"], username, spiritello, variante)
-        azione = "aggiunto"
-    return jsonify({"ok": ok, "azione": azione})
-
+    try:
+        body = request.get_json()
+        user = verifica_init_data(body.get("initData", ""))
+        if not user or user.get("id") == 0:
+            return jsonify({"error": "non autorizzato"}), 401
+        spiritello = body.get("spiritello")
+        variante = body.get("variante")
+        if spiritello not in SPIRITELLI or variante not in VARIANTI:
+            return jsonify({"error": "dati non validi"}), 400
+        username = user.get("username", "utente")
+        collezione = get_collezione(user["id"])
+        esiste = any(s["spiritello"] == spiritello and s["variante"] == variante for s in collezione)
+        if esiste:
+            ok = elimina_spiritello(user["id"], spiritello, variante)
+            azione = "rimosso"
+        else:
+            ok = aggiungi_spiritello(user["id"], username, spiritello, variante)
+            azione = "aggiunto"
+        return jsonify({"ok": ok, "azione": azione})
+    except Exception as e:
+        print("Errore toggle: " + str(e))
+        return jsonify({"error": str(e)}), 500
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
