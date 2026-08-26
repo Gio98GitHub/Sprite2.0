@@ -356,22 +356,32 @@
             }
         }
 
-       async function creaImmagine() {
+      async function creaImmagine() {
     const btn = document.getElementById('creaImmagineBtn');
     btn.disabled = true;
     btn.textContent = 'Creazione in corso...';
 
     try {
         const container = document.getElementById('screenshot-container');
+        const tableWrapper = document.querySelector('.table-wrapper');
+        
+        // Memorizza lo stile originale
+        const originalStyle = tableWrapper.style.overflow;
+        
+        // Rimuovi lo scroll per mostrare tutto
+        tableWrapper.style.overflow = 'visible';
+        tableWrapper.style.maxHeight = 'none';
+        
         const canvas = await html2canvas(container, {
             backgroundColor: null,
             scale: 1,
             useCORS: true,
-            allowTaint: true,
-            scrollY: -window.scrollY,
-            scrollX: -window.scrollX,
-            windowHeight: container.scrollHeight
+            allowTaint: true
         });
+        
+        // Ripristina lo stile originale
+        tableWrapper.style.overflow = originalStyle;
+        tableWrapper.style.maxHeight = '';
         
         const imageData = canvas.toDataURL('image/png');
         
@@ -386,7 +396,6 @@
 
         if (!res.ok) throw new Error('Errore invio');
         
-        const data = await res.json();
         mostraErrore('✓ Screenshot inviato nella chat!');
         
     } catch (e) {
