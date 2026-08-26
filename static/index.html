@@ -345,32 +345,32 @@
             document.getElementById('spiritelli-table').style.display = 'table';
         }
 
-        async function toggle(spiritello, variante, boxElement) {
-            try {
-                const res = await fetch('/api/toggle', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ spiritello: spiritello, variante: variante, initData: tg.initData || initData })
-                });
-
-                if (!res.ok) throw new Error('Errore');
-                const data = await res.json();
-
-                if (data.azione === 'aggiunto') {
-                    collezione.push({ spiritello: spiritello, variante: variante });
-                    boxElement.classList.add('active');
-                } else {
-                    collezione = collezione.filter(function(s) {
-                        return !(s.spiritello === spiritello && s.variante === variante);
-                    });
-                    boxElement.classList.remove('active');
-                }
-
-                if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-            } catch (e) {
-                mostraErrore('Errore: ' + e.message);
-            }
-        }
+       async function toggle(spiritello, variante, boxElement) {
+    // Toggle IMMEDIATO visuale
+    const isActive = boxElement.classList.contains('active');
+    if (isActive) {
+        boxElement.classList.remove('active');
+        collezione = collezione.filter(function(s) {
+            return !(s.spiritello === spiritello && s.variante === variante);
+        });
+    } else {
+        boxElement.classList.add('active');
+        collezione.push({ spiritello: spiritello, variante: variante });
+    }
+    
+    if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+    
+    // Sincronizza con server in background (senza aspettare)
+    fetch('/api/toggle', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ spiritello: spiritello, variante: variante, initData: tg.initData || initData })
+    }).catch(function(e) {
+        console.log("Errore sincronizzazione: " + e.message);
+        // Se fallisce, ricarica la pagina
+        carica();
+    });
+}
 
         async function creaImmagine() {
             const btn = document.getElementById('creaImmagineBtn');
