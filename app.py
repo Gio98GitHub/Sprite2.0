@@ -138,20 +138,13 @@ def api_spiritelli():
 def api_collezione():
     try:
         body = request.get_json()
-        init_data = body.get("initData", "")
-        print("DEBUG initData ricevuto:", init_data)
-        print("DEBUG length:", len(init_data))
-        
-        user = verifica_init_data(init_data)
-        print("DEBUG user:", user)
-        
+        user = verifica_init_data(body.get("initData", ""))
         if not user or user.get("id") == 0:
-            return jsonify({"error": "non autorizzato", "debug": "user not found"}), 401
-        
+            return jsonify({"error": "non autorizzato"}), 401
         collezione = get_collezione(user["id"])
-        return jsonify({"collezione": collezione})
+        return jsonify({"collezione": collezione, "user": user})
     except Exception as e:
-        print("Errore: " + str(e))
+        print("Errore collezione: " + str(e))
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/toggle", methods=["POST"])
@@ -179,5 +172,6 @@ def api_toggle():
     except Exception as e:
         print("Errore toggle: " + str(e))
         return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
