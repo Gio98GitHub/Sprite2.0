@@ -3,19 +3,14 @@ import psycopg2
 import hashlib
 import hmac
 import json
+import base64
+import io
 from urllib.parse import parse_qsl
 from flask import Flask, request, jsonify, send_from_directory
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 import asyncio
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-
-try:
-    from PIL import Image, ImageDraw, ImageFont
-except ImportError:
-    Image = None
-    ImageDraw = None
-    ImageFont = None
 
 app = Flask(__name__, static_folder="static")
 
@@ -178,6 +173,39 @@ def api_toggle():
         return jsonify({"ok": ok, "azione": azione})
     except Exception as e:
         print("Errore toggle: " + str(e))
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/invia-screenshot", methods=["POST"])
+@limiter.limit("10 per minute")
+def invia_screenshot():
+    try:
+        body = request.get_json()
+        user = verifica_init_data(body.get("initData", ""))
+        if not user or user.get("id") == 0:
+            return jsonify({"error": "non autorizzato"}), 401
+        
+        image_data = body.get("screenshot")
+        if not image_data:
+            return jsonify({"error": "nessuna immagine"}), 400
+        
+        # Decodifica l'immagine base64
+        image_bytes = base64.b64decode(image_data.split(",")[1])
+        
+        # Invia l'immagine al bot nella chat privata
+        bot = Bot(token=BOT_TOKEN)
+        try:
+            asyncio.run(bot.send_photo(
+                chat_id=user["id"],
+                photo=image_bytes,
+                caption="Ecco la mia collezione di Spiritelli! 🎮✨"
+            ))
+            return jsonify({"ok": True, "message": "Screenshot inviato!"})
+        except Exception as e:
+            print("Errore invio immagine: " + str(e))
+            return jsonify({"error": "Errore invio immagine"}), 500
+    
+    except Exception as e:
+        print("Errore invia_screenshot: " + str(e))
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
