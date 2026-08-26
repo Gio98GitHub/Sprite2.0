@@ -198,6 +198,20 @@
             transform: scale(1);
         }
         
+        .watermark {
+            position: fixed;
+            bottom: 80px;
+            right: 10px;
+            font-size: 8px;
+            color: rgba(0, 255, 255, 0.4);
+            font-family: 'Fredoka', sans-serif;
+            text-align: right;
+            text-shadow: 0 0 3px rgba(0, 255, 255, 0.3);
+            z-index: 5;
+            max-width: 80px;
+            line-height: 1.2;
+        }
+        
         .loading {
             text-align: center;
             padding: 40px;
@@ -247,6 +261,8 @@
     <div class="button-container">
         <button class="crea-immagine-btn" id="creaImmagineBtn">Crea Immagine</button>
     </div>
+
+    <div class="watermark">By Fortnite_Italia_Leaks<br>on Telegram</div>
 
     <script>
         const tg = window.Telegram.WebApp;
@@ -356,61 +372,74 @@
             }
         }
 
-   async function creaImmagine() {
-    const btn = document.getElementById('creaImmagineBtn');
-    btn.disabled = true;
-    btn.textContent = 'Creazione in corso...';
+        async function creaImmagine() {
+            const btn = document.getElementById('creaImmagineBtn');
+            btn.disabled = true;
+            btn.textContent = 'Creazione in corso...';
 
-    try {
-        const container = document.getElementById('screenshot-container');
-        const tableWrapper = document.querySelector('.table-wrapper');
-        
-        // Memorizza lo stile originale
-        const originalOverflow = tableWrapper.style.overflow;
-        const originalMaxHeight = tableWrapper.style.maxHeight;
-        
-        // Rimuovi lo scroll per mostrare tutto
-        tableWrapper.style.overflow = 'visible';
-        tableWrapper.style.maxHeight = 'none';
-        
-        // Aggiungi sfondo temporaneo al container
-        const originalBg = container.style.background;
-        container.style.background = "url('/static/background.png') center/cover no-repeat";
-        
-        const canvas = await html2canvas(container, {
-            backgroundColor: null,
-            scale: 1,
-            useCORS: true,
-            allowTaint: true
-        });
-        
-        // Ripristina lo stile originale
-        tableWrapper.style.overflow = originalOverflow;
-        tableWrapper.style.maxHeight = originalMaxHeight;
-        container.style.background = originalBg;
-        
-        const imageData = canvas.toDataURL('image/png');
-        
-        const res = await fetch('/api/invia-screenshot', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                screenshot: imageData,
-                initData: tg.initData || initData
-            })
-        });
+            try {
+                const container = document.getElementById('screenshot-container');
+                const tableWrapper = document.querySelector('.table-wrapper');
+                
+                // Memorizza lo stile originale
+                const originalOverflow = tableWrapper.style.overflow;
+                const originalMaxHeight = tableWrapper.style.maxHeight;
+                
+                // Rimuovi lo scroll per mostrare tutto
+                tableWrapper.style.overflow = 'visible';
+                tableWrapper.style.maxHeight = 'none';
+                
+                // Aggiungi sfondo temporaneo al container
+                const originalBg = container.style.background;
+                container.style.background = "url('/static/background.png') center/cover no-repeat";
+                
+                // Crea elemento watermark
+                const watermark = document.createElement('div');
+                watermark.style.textAlign = 'center';
+                watermark.style.marginTop = '20px';
+                watermark.style.fontSize = '12px';
+                watermark.style.color = 'rgba(0, 255, 255, 0.8)';
+                watermark.style.fontFamily = 'Fredoka, sans-serif';
+                watermark.style.textShadow = '0 0 5px rgba(0, 255, 255, 0.5)';
+                watermark.textContent = 'By Fortnite_Italia_Leaks on Telegram';
+                
+                container.appendChild(watermark);
+                
+                const canvas = await html2canvas(container, {
+                    backgroundColor: null,
+                    scale: 1,
+                    useCORS: true,
+                    allowTaint: true
+                });
+                
+                // Ripristina lo stile originale
+                tableWrapper.style.overflow = originalOverflow;
+                tableWrapper.style.maxHeight = originalMaxHeight;
+                container.style.background = originalBg;
+                container.removeChild(watermark);
+                
+                const imageData = canvas.toDataURL('image/png');
+                
+                const res = await fetch('/api/invia-screenshot', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        screenshot: imageData,
+                        initData: tg.initData || initData
+                    })
+                });
 
-        if (!res.ok) throw new Error('Errore invio');
-        
-        mostraErrore('✓ Screenshot inviato nella chat!');
-        
-    } catch (e) {
-        mostraErrore('Errore: ' + e.message);
-    } finally {
-        btn.disabled = false;
-        btn.textContent = 'Crea Immagine';
-    }
-}
+                if (!res.ok) throw new Error('Errore invio');
+                
+                mostraErrore('✓ Screenshot inviato nella chat!');
+                
+            } catch (e) {
+                mostraErrore('Errore: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Crea Immagine';
+            }
+        }
 
         function mostraErrore(msg) {
             const errorDiv = document.getElementById('error');
@@ -424,4 +453,3 @@
     </script>
 </body>
 </html>
-
