@@ -65,28 +65,31 @@
         let varianti = [];
         let collezione = [];
 
-        async function carica() {
-            try {
-                const configRes = await fetch('/api/spiritelli');
-                const config = await configRes.json();
-                spiritelli = config.spiritelli;
-                varianti = config.varianti;
+      async function carica() {
+    try {
+        const configRes = await fetch('/api/spiritelli');
+        const config = await configRes.json();
+        spiritelli = config.spiritelli;
+        varianti = config.varianti;
 
-                const collezioneRes = await fetch('/api/collezione', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ initData })
-                });
+        console.log("initData:", initData);
+        console.log("tg.initData:", tg.initData);
 
-                if (!collezioneRes.ok) throw new Error('Errore caricamento');
-                const data = await collezioneRes.json();
-                collezione = data.collezione;
+        const collezioneRes = await fetch('/api/collezione', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ initData: tg.initData || initData })
+        });
 
-                renderTabella();
-            } catch (e) {
-                mostraErrore('Errore: ' + e.message);
-            }
-        }
+        if (!collezioneRes.ok) throw new Error('Errore caricamento');
+        const data = await collezioneRes.json();
+        collezione = data.collezione;
+
+        renderTabella();
+    } catch (e) {
+        mostraErrore('Errore: ' + e.message);
+    }
+}
 
         function getNomeImmagine(spiritello, variante) {
             const spiritelloLower = spiritello.toLowerCase().replace(/\s+/g, '-');
