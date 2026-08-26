@@ -174,6 +174,26 @@
             font-family: 'Fredoka', sans-serif;
             color: #ff6666;
         }
+
+        .condividi-btn {
+            margin-top: 15px;
+            width: 100%;
+            padding: 14px;
+            font-family: 'Fredoka', sans-serif;
+            font-weight: 700;
+            font-size: 16px;
+            background: linear-gradient(135deg, #ff00ff, #00ffff);
+            border: none;
+            border-radius: 10px;
+            color: #000;
+            cursor: pointer;
+            transition: opacity 0.2s ease;
+        }
+
+        .condividi-btn:disabled {
+            opacity: 0.6;
+            cursor: default;
+        }
     </style>
 </head>
 <body>
@@ -197,6 +217,10 @@
                 <tbody id="table-body"></tbody>
             </table>
         </div>
+
+        <button id="condividi-btn" class="condividi-btn" onclick="condividi()">
+            📸 Manda la mia collezione in chat
+        </button>
         
         <div id="error" class="error" style="display: none;"></div>
     </div>
@@ -230,8 +254,8 @@
                 collezione = data.collezione || [];
                 currentUser = data.user;
 
-                if (currentUser && currentUser.first_name) {
-                    document.getElementById('username').textContent = currentUser.first_name;
+                if (currentUser && currentUser.id) {
+                    document.getElementById('username').textContent = currentUser.id;
                 } else {
                     document.getElementById('username').textContent = 'Giocatore';
                 }
@@ -306,6 +330,27 @@
                 if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
             } catch (e) {
                 mostraErrore('Errore: ' + e.message);
+            }
+        }
+
+        async function condividi() {
+            const btn = document.getElementById('condividi-btn');
+            btn.disabled = true;
+            btn.textContent = 'Invio in corso...';
+            try {
+                const res = await fetch('/api/condividi', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ initData: tg.initData || initData })
+                });
+                if (!res.ok) throw new Error('Invio fallito');
+                btn.textContent = '✓ Inviato in chat!';
+                if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+            } catch (e) {
+                mostraErrore('Errore: ' + e.message);
+                btn.textContent = '📸 Manda la mia collezione in chat';
+            } finally {
+                btn.disabled = false;
             }
         }
 
