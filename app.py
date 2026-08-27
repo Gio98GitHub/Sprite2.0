@@ -1,6 +1,7 @@
 import os
 import psycopg2
 import psycopg2.extensions
+import psycopg2.pool
 import hashlib
 import hmac
 import json
@@ -77,40 +78,63 @@ SPIRITELLI = ["Sonic", "8-Bit", "Corona", "Cespuglio", "Klombo", "Tails", "Shado
 INITDATA_EXPIRY = 3600  # 1 ora
 
 # ==================== DATABASE ====================
+db_pool = psycopg2.pool.ThreadedConnectionPool(
+    minconn=2,
+    maxconn=15,
+    dsn=DATABASE_URL,
+    connect_timeout=5
+)
+
 def get_db_connection():
-    """Connessione al database con timeout"""
+    """Preleva una connessione dal pool (thread-safe)"""
     try:
-        conn = psycopg2.connect(DATABASE_URL, connect_timeout=5)
-        return conn
+        return db_pool.getconn()
     except psycopg2.Error as e:
-        logger.error(f"Errore connessione database: {str(e)}")
+        logger.error(f"Errore ottenimento connessione dal pool: {str(e)}")
         return None
 
-def log_audit(user_id, action, details=""):
-    """Registra le azioni dell'utente per audit"""
+def release_db_connection(conn):
+    """Rilascia la connessione nel pool invece di chiuderla"""
+    if conn:
+        try:
+            db_pool.putconn(conn)
+        except Exception as e:
+            logger.error(f"Errore rilascio connessione al pool: {str(e)}")
+
+def log_audit(user_id, action, details="", conn=None):
+    """Registra le azioni dell'utente per audit.
+    Se viene passata una connessione esistente, la riusa (stessa transazione)
+    invece di aprirne una nuova dal pool."""
+    conn_locale = conn is None
     try:
-        conn = get_db_connection()
-        if not conn:
-            logger.warning(f"Impossibile registrare audit: DB non disponibile")
-            return
+        if conn_locale:
+            conn = get_db_connection()
+            if not conn:
+                logger.warning(f"Impossibile registrare audit: DB non disponibile")
+                return
         
         c = conn.cursor()
         c.execute(
             "INSERT INTO audit_log (user_id, action, details, timestamp) VALUES (%s, %s, %s, NOW())",
             (user_id, action, details)
         )
-        conn.commit()
+        if conn_locale:
+            conn.commit()
         c.close()
-        conn.close()
+        if conn_locale:
+            release_db_connection(conn)
     except Exception as e:
         logger.error(f"Errore audit log: {str(e)}")
 
-def upsert_utente(user_id, username):
-    """Inserisce l'utente se non esiste, altrimenti aggiorna lo username (tabella normalizzata)"""
+def upsert_utente(user_id, username, conn=None):
+    """Inserisce l'utente se non esiste, altrimenti aggiorna lo username.
+    Se viene passata una connessione esistente, la riusa invece di aprirne una nuova."""
+    conn_locale = conn is None
     try:
-        conn = get_db_connection()
-        if not conn:
-            return False
+        if conn_locale:
+            conn = get_db_connection()
+            if not conn:
+                return False
         c = conn.cursor()
         try:
             c.execute(
@@ -118,38 +142,40 @@ def upsert_utente(user_id, username):
                 "ON CONFLICT (user_id) DO UPDATE SET username = EXCLUDED.username, aggiornato_il = NOW()",
                 (user_id, username)
             )
-            conn.commit()
+            if conn_locale:
+                conn.commit()
             return True
         except psycopg2.Error as e:
-            conn.rollback()
+            if conn_locale:
+                conn.rollback()
             logger.error(f"Errore upsert utente: {str(e)}")
             return False
         finally:
             c.close()
-            conn.close()
+            if conn_locale:
+                release_db_connection(conn)
     except Exception as e:
         logger.error(f"Errore DB upsert_utente: {str(e)}")
         return False
 
 def aggiungi_spiritello(user_id, username, spiritello, variante):
-    """Aggiunge uno spiritello alla collezione (transazione atomica)"""
+    """Aggiunge uno spiritello alla collezione. Usa un'unica connessione
+    per upsert utente + inserimento spiritello + audit (una sola transazione)."""
+    conn = get_db_connection()
+    if not conn:
+        return False
     try:
-        upsert_utente(user_id, username)
-
-        conn = get_db_connection()
-        if not conn:
-            return False
-        
         conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_SERIALIZABLE)
+        upsert_utente(user_id, username, conn=conn)
+
         c = conn.cursor()
-        
         try:
             c.execute(
                 "INSERT INTO collezione (user_id, spiritello, variante) VALUES (%s, %s, %s) ON CONFLICT (user_id, spiritello, variante) DO NOTHING",
                 (user_id, spiritello, variante)
             )
-            conn.commit()
             inserted = c.rowcount > 0
+            conn.commit()
             return inserted
         except psycopg2.Error as e:
             conn.rollback()
@@ -157,21 +183,20 @@ def aggiungi_spiritello(user_id, username, spiritello, variante):
             return False
         finally:
             c.close()
-            conn.close()
     except Exception as e:
         logger.error(f"Errore DB aggiungi_spiritello: {str(e)}")
         return False
+    finally:
+        release_db_connection(conn)
 
 def elimina_spiritello(user_id, spiritello, variante):
     """Elimina uno spiritello dalla collezione (transazione atomica)"""
+    conn = get_db_connection()
+    if not conn:
+        return False
     try:
-        conn = get_db_connection()
-        if not conn:
-            return False
-        
         conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_SERIALIZABLE)
         c = conn.cursor()
-        
         try:
             c.execute(
                 "DELETE FROM collezione WHERE user_id = %s AND spiritello = %s AND variante = %s",
@@ -186,23 +211,28 @@ def elimina_spiritello(user_id, spiritello, variante):
             return False
         finally:
             c.close()
-            conn.close()
     except Exception as e:
         logger.error(f"Errore DB elimina_spiritello: {str(e)}")
         return False
+    finally:
+        release_db_connection(conn)
 
-def get_collezione(user_id):
-    """Recupera la collezione dell'utente"""
+def get_collezione(user_id, conn=None):
+    """Recupera la collezione dell'utente.
+    Se viene passata una connessione esistente, la riusa."""
+    conn_locale = conn is None
     try:
-        conn = get_db_connection()
-        if not conn:
-            return []
+        if conn_locale:
+            conn = get_db_connection()
+            if not conn:
+                return []
         
         c = conn.cursor()
         c.execute("SELECT spiritello, variante FROM collezione WHERE user_id = %s", (user_id,))
         rows = c.fetchall()
         c.close()
-        conn.close()
+        if conn_locale:
+            release_db_connection(conn)
         return [{"spiritello": r[0], "variante": r[1]} for r in rows]
     except Exception as e:
         logger.error(f"Errore get_collezione: {str(e)}")
@@ -418,8 +448,15 @@ def api_collezione():
             logger.warning(f"ID utente non valido: {user.get('id')}")
             return jsonify({"error": "ID utente non valido"}), 401
         
-        collezione = get_collezione(user["id"])
-        log_audit(user["id"], "fetch_collezione", "")
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"error": "Errore database"}), 500
+        try:
+            collezione = get_collezione(user["id"], conn=conn)
+            log_audit(user["id"], "fetch_collezione", "", conn=conn)
+            conn.commit()
+        finally:
+            release_db_connection(conn)
         
         return jsonify({"collezione": collezione, "user": user})
     except Exception as e:
@@ -457,15 +494,16 @@ def api_toggle():
             return jsonify({"error": "Dati non validi"}), 400
         
         username = user.get("username", "utente")
-        upsert_utente(user["id"], username)
-        collezione = get_collezione(user["id"])
+        
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"error": "Errore database"}), 500
         
         try:
-            conn = get_db_connection()
-            if not conn:
-                return jsonify({"error": "Errore database"}), 500
-            
             conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_SERIALIZABLE)
+            
+            upsert_utente(user["id"], username, conn=conn)
+            
             c = conn.cursor()
             
             c.execute(
@@ -487,18 +525,21 @@ def api_toggle():
                 )
                 azione = "aggiunto"
             
+            log_audit(user["id"], "toggle_sprite", f"{spiritello}-{variante}-{azione}", conn=conn)
+            
             conn.commit()
             c.close()
-            conn.close()
             
-            log_audit(user["id"], "toggle_sprite", f"{spiritello}-{variante}-{azione}")
             logger.info(f"Toggle spiritello: user={user['id']}, spiritello={spiritello}, azione={azione}")
             
             return jsonify({"ok": True, "azione": azione})
         
         except psycopg2.Error as e:
+            conn.rollback()
             logger.error(f"Errore transazione toggle: {str(e)}")
             return jsonify({"error": "Errore database"}), 500
+        finally:
+            release_db_connection(conn)
     
     except Exception as e:
         logger.error(f"Errore toggle: {str(e)}")
