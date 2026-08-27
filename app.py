@@ -410,7 +410,7 @@ def api_collezione():
         return jsonify({"error": "Errore interno del server"}), 500
 
 @app.route("/api/toggle", methods=["POST"])
-@limiter.limit("10 per minute")
+@limiter.limit("30 per minute")
 def api_toggle():
     """Toggle uno spiritello nella collezione (richiede autenticazione)"""
     try:
