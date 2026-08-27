@@ -1,212 +1,581 @@
 import os
 import psycopg2
+import psycopg2.extensions
 import hashlib
 import hmac
 import json
 import base64
-import io
+import time
+import uuid
+import logging
 from urllib.parse import parse_qsl
 from flask import Flask, request, jsonify, send_from_directory
-from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 import asyncio
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_talisman import Talisman
 
+# ==================== CONFIGURAZIONE LOGGING ====================
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# ==================== INIZIALIZZAZIONE APP ====================
 app = Flask(__name__, static_folder="static")
 
+# ==================== VARIABILI AMBIENTE ====================
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 GROUP_CHAT_ID = os.environ.get("GROUP_CHAT_ID")
 DATABASE_URL = os.environ.get("DATABASE_URL")
-WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
+WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET")
+WEBHOOK_PATH = os.environ.get("WEBHOOK_PATH", f"/webhook/{uuid.uuid4().hex}")
 
-limiter = Limiter(get_remote_address, app=app, default_limits=["60 per minute"], storage_uri="memory://")
+if not all([BOT_TOKEN, GROUP_CHAT_ID, DATABASE_URL, WEBHOOK_SECRET]):
+    logger.error("Variabili d'ambiente mancanti!")
+    raise ValueError("Mancano variabili d'ambiente critiche")
 
+# ==================== SECURITY HEADERS ====================
+Talisman(app, 
+    force_https=True,
+    strict_transport_security=True,
+    strict_transport_security_max_age=31536000,
+    content_security_policy={
+        'default-src': "'self'",
+        'script-src': ["'self'", "'unsafe-inline'", "cdnjs.cloudflare.com", "telegram.org"],
+        'style-src': ["'self'", "'unsafe-inline'", "fonts.googleapis.com"],
+        'font-src': ["'self'", "fonts.gstatic.com"],
+        'img-src': ["'self'", "data:", "https:"],
+    }
+)
+
+# ==================== RATE LIMITING ====================
+def get_user_id():
+    """Estrae l'user_id dalla richiesta per rate limiting accurato"""
+    try:
+        body = request.get_json(force=False, silent=True) or {}
+        init_data = body.get("initData", "")
+        user = verifica_init_data(init_data)
+        if user:
+            return str(user.get("id", get_remote_address()))
+    except:
+        pass
+    return get_remote_address()
+
+limiter = Limiter(
+    key_func=get_user_id,
+    app=app,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
+
+# ==================== COSTANTI ====================
 VARIANTI = ["Base", "Oro", "Maestro dei Trucchi"]
 SPIRITELLI = ["Sonic", "8-Bit", "Corona", "Cespuglio", "Klombo", "Tails", "Shadow", "Avventura", "Killswitch", "Jackrabbit", "Jonesy"]
+INITDATA_EXPIRY = 3600  # 1 ora
 
+# ==================== DATABASE ====================
 def get_db_connection():
-    return psycopg2.connect(DATABASE_URL)
+    """Connessione al database con timeout"""
+    try:
+        conn = psycopg2.connect(DATABASE_URL, connect_timeout=5)
+        return conn
+    except psycopg2.Error as e:
+        logger.error(f"Errore connessione database: {str(e)}")
+        return None
 
-def aggiungi_spiritello(user_id, username, spiritello, variante):
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("INSERT INTO collezione (user_id, username, spiritello, variante) VALUES (%s, %s, %s, %s) ON CONFLICT (user_id, spiritello, variante) DO NOTHING", (user_id, username, spiritello, variante))
-    conn.commit()
-    inserted = c.rowcount > 0
-    conn.close()
-    return inserted
-
-def elimina_spiritello(user_id, spiritello, variante):
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("DELETE FROM collezione WHERE user_id = %s AND spiritello = %s AND variante = %s", (user_id, spiritello, variante))
-    conn.commit()
-    deleted = c.rowcount > 0
-    conn.close()
-    return deleted
-
-def get_collezione(user_id):
+def log_audit(user_id, action, details=""):
+    """Registra le azioni dell'utente per audit"""
     try:
         conn = get_db_connection()
+        if not conn:
+            logger.warning(f"Impossibile registrare audit: DB non disponibile")
+            return
+        
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO audit_log (user_id, action, details, timestamp) VALUES (%s, %s, %s, NOW())",
+            (user_id, action, details)
+        )
+        conn.commit()
+        c.close()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Errore audit log: {str(e)}")
+
+def aggiungi_spiritello(user_id, username, spiritello, variante):
+    """Aggiunge uno spiritello alla collezione (transazione atomica)"""
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return False
+        
+        conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_SERIALIZABLE)
+        c = conn.cursor()
+        
+        try:
+            c.execute(
+                "INSERT INTO collezione (user_id, username, spiritello, variante) VALUES (%s, %s, %s, %s) ON CONFLICT (user_id, spiritello, variante) DO NOTHING",
+                (user_id, username, spiritello, variante)
+            )
+            conn.commit()
+            inserted = c.rowcount > 0
+            return inserted
+        except psycopg2.Error as e:
+            conn.rollback()
+            logger.error(f"Errore inserimento spiritello: {str(e)}")
+            return False
+        finally:
+            c.close()
+            conn.close()
+    except Exception as e:
+        logger.error(f"Errore DB aggiungi_spiritello: {str(e)}")
+        return False
+
+def elimina_spiritello(user_id, spiritello, variante):
+    """Elimina uno spiritello dalla collezione (transazione atomica)"""
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return False
+        
+        conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_SERIALIZABLE)
+        c = conn.cursor()
+        
+        try:
+            c.execute(
+                "DELETE FROM collezione WHERE user_id = %s AND spiritello = %s AND variante = %s",
+                (user_id, spiritello, variante)
+            )
+            conn.commit()
+            deleted = c.rowcount > 0
+            return deleted
+        except psycopg2.Error as e:
+            conn.rollback()
+            logger.error(f"Errore eliminazione spiritello: {str(e)}")
+            return False
+        finally:
+            c.close()
+            conn.close()
+    except Exception as e:
+        logger.error(f"Errore DB elimina_spiritello: {str(e)}")
+        return False
+
+def get_collezione(user_id):
+    """Recupera la collezione dell'utente"""
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return []
+        
         c = conn.cursor()
         c.execute("SELECT spiritello, variante FROM collezione WHERE user_id = %s", (user_id,))
         rows = c.fetchall()
+        c.close()
         conn.close()
         return [{"spiritello": r[0], "variante": r[1]} for r in rows]
     except Exception as e:
-        print("Errore get_collezione: " + str(e))
+        logger.error(f"Errore get_collezione: {str(e)}")
         return []
 
+# ==================== AUTENTICAZIONE ====================
 def verifica_init_data(init_data):
+    """
+    Verifica e decodifica l'initData di Telegram WebApp
+    ✅ Valida la firma HMAC-SHA256
+    ✅ Controlla la scadenza (max 1 ora)
+    ✅ Estrae i dati dell'utente
+    """
     try:
-        if not init_data:
+        if not init_data or not isinstance(init_data, str):
             return None
+        
         parsed = dict(parse_qsl(init_data))
         received_hash = parsed.pop("hash", None)
-        if not received_hash:
+        auth_date = parsed.pop("auth_date", None)
+        
+        if not received_hash or not auth_date:
+            logger.warning("Hash o auth_date mancanti in initData")
             return None
+        
+        # ✅ CONTROLLO SCADENZA (Valità: 1 ora)
+        try:
+            auth_timestamp = int(auth_date)
+            current_time = int(time.time())
+            if current_time - auth_timestamp > INITDATA_EXPIRY:
+                logger.info(f"InitData scaduto: {current_time - auth_timestamp}s fa")
+                return None
+        except ValueError:
+            logger.warning("auth_date non è un numero valido")
+            return None
+        
+        # ✅ VERIFICA FIRMA HMAC-SHA256
         data_check_string = "\n".join(k + "=" + v for k, v in sorted(parsed.items()))
         secret_key = hmac.new("WebAppData".encode(), BOT_TOKEN.encode(), hashlib.sha256).digest()
         calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+        
         if not hmac.compare_digest(calculated_hash, received_hash):
+            logger.warning("Firma HMAC non valida")
             return None
+        
+        # ✅ ESTRAZIONE DATI UTENTE
         user_data = parsed.get("user")
         if not user_data:
-            return {"id": 0, "username": "utente"}
-        return json.loads(user_data)
+            logger.warning("Nessun dato utente in initData")
+            return None
+        
+        try:
+            user = json.loads(user_data)
+            # ✅ VALIDAZIONE ID UTENTE
+            if not isinstance(user.get("id"), int) or user.get("id") <= 0:
+                logger.warning(f"ID utente non valido: {user.get('id')}")
+                return None
+            return user
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.warning(f"Errore parsing JSON user data: {str(e)}")
+            return None
+            
     except Exception as e:
-        print("Errore verifica: " + str(e))
-        return {"id": 0, "username": "utente"}
+        logger.error(f"Errore verifica initData: {str(e)}")
+        return None
 
-async def rispondi_comando_start(chat_id, message_id):
-    bot = Bot(token=BOT_TOKEN)
+def verifica_gruppo_autorizzato(chat_id):
+    """Verifica che il comando sia eseguito nel gruppo autorizzato"""
+    # ✅ Consenti comandi SOLO nel gruppo configurato
+    if str(chat_id) != str(GROUP_CHAT_ID):
+        logger.info(f"Tentativo in gruppo non autorizzato: {chat_id}")
+        return False
+    return True
+
+# ==================== BOT COMMANDS ====================
+async def rispondi_comando_start(chat_id, message_id, user_id, bot):
+    """Risponde a /start - ACCESSIBILE A TUTTI nel gruppo autorizzato"""
+    
+    # ✅ Verifica che questo sia il gruppo autorizzato
+    if not verifica_gruppo_autorizzato(chat_id):
+        return
+    
+    # ✅ NIENTE controllo admin - chiunque nel gruppo può usarlo
+    
     bot_username = "sprite2bot"
-    link_chat = "https://t.me/" + bot_username + "?start=open"
+    link_chat = f"https://t.me/{bot_username}?start=open"
     testo_risposta = "SpriteBot 2.0\n\nApri la chat con il bot per gestire la tua collezione!"
     testo_bottone = "Apri Chat"
     tastiera = InlineKeyboardMarkup([[InlineKeyboardButton(testo_bottone, url=link_chat)]])
+    
     try:
-        await bot.send_message(chat_id=chat_id, text=testo_risposta, parse_mode="HTML", reply_to_message_id=message_id, reply_markup=tastiera)
+        await bot.send_message(
+            chat_id=chat_id,
+            text=testo_risposta,
+            parse_mode="HTML",
+            reply_to_message_id=message_id,
+            reply_markup=tastiera
+        )
+        # ✅ Log audit
+        log_audit(user_id, "used_start_command", f"chat_id={chat_id}")
+        logger.info(f"/start eseguito da user {user_id} nel gruppo {chat_id}")
     except Exception as e:
-        print("Errore invio messaggio: " + str(e))
+        logger.error(f"Errore invio messaggio: {str(e)}")
 
 async def rispondi_comando_chat_privata(chat_id, message_id):
+    """Risponde a /start nella chat privata con il bot"""
     bot = Bot(token=BOT_TOKEN)
     link_web_app = "https://sprite2-0.onrender.com/"
     testo_risposta = "SpriteBot 2.0\n\nGestisci la tua collezione di Spiritelli!"
     testo_bottone = "Apri App"
-    from telegram import WebAppInfo
     webapp_info = WebAppInfo(url=link_web_app)
     tastiera = InlineKeyboardMarkup([[InlineKeyboardButton(testo_bottone, web_app=webapp_info)]])
+    
     try:
-        await bot.send_message(chat_id=chat_id, text=testo_risposta, parse_mode="HTML", reply_markup=tastiera)
+        await bot.send_message(
+            chat_id=chat_id,
+            text=testo_risposta,
+            parse_mode="HTML",
+            reply_markup=tastiera
+        )
+        logger.info(f"WebApp aperta per user {chat_id}")
     except Exception as e:
-        print("Errore invio messaggio: " + str(e))
+        logger.error(f"Errore invio messaggio privato: {str(e)}")
 
+# ==================== ROUTES ====================
 @app.route("/")
 def home():
-    return send_from_directory("static", "index.html")
+    """Serve la home page"""
+    try:
+        return send_from_directory("static", "index.html")
+    except Exception as e:
+        logger.error(f"Errore caricamento index.html: {str(e)}")
+        return jsonify({"error": "Errore interno del server"}), 500
 
 @app.route("/static/<path:path>")
 def static_files(path):
-    return send_from_directory("static", path)
+    """Serve file statici"""
+    try:
+        return send_from_directory("static", path)
+    except Exception as e:
+        logger.error(f"Errore caricamento file statico {path}: {str(e)}")
+        return jsonify({"error": "File non trovato"}), 404
 
-@app.route(f"/webhook/{BOT_TOKEN}", methods=["POST"])
+@app.route(WEBHOOK_PATH, methods=["POST"])
 def telegram_webhook():
-    if WEBHOOK_SECRET:
+    """Webhook per ricevere aggiornamenti da Telegram"""
+    try:
+        # ✅ VERIFICA SECRET TOKEN (Obbligatorio)
         header_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-        if not hmac.compare_digest(header_secret, WEBHOOK_SECRET):
+        if not header_secret:
+            logger.warning("Richiesta webhook senza header secret")
             return jsonify({"status": "forbidden"}), 403
-    update = request.get_json()
-    if update and "message" in update:
-        message = update["message"]
-        text = message.get("text", "")
-        chat_id = message["chat"]["id"]
-        message_id = message["message_id"]
-        chat_type = message["chat"].get("type")
-        if text.startswith("/start"):
-            if chat_type == "group" or chat_type == "supergroup":
-                asyncio.run(rispondi_comando_start(chat_id, message_id))
-            elif chat_type == "private":
-                asyncio.run(rispondi_comando_chat_privata(chat_id, message_id))
-    return jsonify({"status": "ok"})
+        
+        if not hmac.compare_digest(header_secret, WEBHOOK_SECRET):
+            logger.warning(f"Secret token non valido")
+            return jsonify({"status": "forbidden"}), 403
+        
+        # ✅ VALIDAZIONE JSON
+        try:
+            update = request.get_json(force=False, silent=False)
+        except Exception as e:
+            logger.error(f"JSON non valido nel webhook: {str(e)}")
+            return jsonify({"status": "invalid_json"}), 400
+        
+        if not isinstance(update, dict):
+            logger.warning("Update non è un dizionario")
+            return jsonify({"status": "invalid_format"}), 400
+        
+        # ✅ LOG WEBHOOK
+        logger.info(f"Webhook ricevuto - Update ID: {update.get('update_id', 'unknown')}")
+        
+        if update and "message" in update:
+            message = update["message"]
+            
+            # ✅ VALIDAZIONE CAMPI OBBLIGATORI
+            if not all(k in message for k in ["chat", "text"]):
+                logger.warning("Campi obbligatori mancanti nel messaggio")
+                return jsonify({"status": "ok"}), 200
+            
+            text = message.get("text", "")
+            chat_id = message["chat"].get("id")
+            message_id = message.get("message_id")
+            user_id = message.get("from", {}).get("id")
+            chat_type = message["chat"].get("type")
+            
+            if text.startswith("/start"):
+                if chat_type == "group" or chat_type == "supergroup":
+                    # ✅ CHIUNQUE nel gruppo autorizzato può usare /start
+                    asyncio.run(rispondi_comando_start(chat_id, message_id, user_id, Bot(token=BOT_TOKEN)))
+                elif chat_type == "private":
+                    # ✅ Chat privata
+                    asyncio.run(rispondi_comando_chat_privata(chat_id, message_id))
+        
+        return jsonify({"status": "ok"}), 200
+    
+    except Exception as e:
+        logger.error(f"Errore webhook: {str(e)}")
+        return jsonify({"status": "error"}), 500
 
 @app.route("/api/spiritelli")
 def api_spiritelli():
-    return jsonify({"spiritelli": SPIRITELLI, "varianti": VARIANTI})
+    """Ritorna lista di spiritelli e varianti"""
+    try:
+        return jsonify({"spiritelli": SPIRITELLI, "varianti": VARIANTI})
+    except Exception as e:
+        logger.error(f"Errore api_spiritelli: {str(e)}")
+        return jsonify({"error": "Errore interno del server"}), 500
 
 @app.route("/api/collezione", methods=["POST"])
 @limiter.limit("30 per minute")
 def api_collezione():
+    """Ritorna la collezione dell'utente (richiede autenticazione)"""
     try:
         body = request.get_json()
         user = verifica_init_data(body.get("initData", ""))
-        if not user or user.get("id") == 0:
-            return jsonify({"error": "non autorizzato"}), 401
+        
+        # ✅ AUTENTICAZIONE RICHIESTA
+        if not user:
+            logger.warning("Tentativo accesso /api/collezione senza autenticazione")
+            return jsonify({"error": "Autenticazione richiesta"}), 401
+        
+        if not isinstance(user.get("id"), int) or user.get("id") <= 0:
+            logger.warning(f"ID utente non valido: {user.get('id')}")
+            return jsonify({"error": "ID utente non valido"}), 401
+        
         collezione = get_collezione(user["id"])
+        log_audit(user["id"], "fetch_collezione", "")
+        
         return jsonify({"collezione": collezione, "user": user})
     except Exception as e:
-        print("Errore collezione: " + str(e))
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"Errore collezione: {str(e)}")
+        return jsonify({"error": "Errore interno del server"}), 500
 
 @app.route("/api/toggle", methods=["POST"])
-@limiter.limit("20 per minute")
+@limiter.limit("10 per minute")
 def api_toggle():
+    """Toggle uno spiritello nella collezione (richiede autenticazione)"""
     try:
         body = request.get_json()
         user = verifica_init_data(body.get("initData", ""))
-        if not user or user.get("id") == 0:
-            return jsonify({"error": "non autorizzato"}), 401
+        
+        # ✅ AUTENTICAZIONE RICHIESTA
+        if not user:
+            logger.warning("Tentativo toggle senza autenticazione")
+            return jsonify({"error": "Autenticazione richiesta"}), 401
+        
+        if not isinstance(user.get("id"), int) or user.get("id") <= 0:
+            return jsonify({"error": "ID utente non valido"}), 401
+        
         spiritello = body.get("spiritello")
         variante = body.get("variante")
+        
+        # ✅ VALIDAZIONE TIPO E LUNGHEZZA
+        if not isinstance(spiritello, str) or not isinstance(variante, str):
+            logger.warning(f"Tipi non validi: spiritello={type(spiritello)}, variante={type(variante)}")
+            return jsonify({"error": "Tipi non validi"}), 400
+        
+        if len(spiritello) > 50 or len(variante) > 50:
+            logger.warning("Input troppo lungo")
+            return jsonify({"error": "Input troppo lungo"}), 400
+        
+        # ✅ VALIDAZIONE WHITELIST (CRITICO)
         if spiritello not in SPIRITELLI or variante not in VARIANTI:
-            return jsonify({"error": "dati non validi"}), 400
+            logger.warning(f"Input non autorizzato: spiritello={spiritello}, variante={variante}")
+            return jsonify({"error": "Dati non validi"}), 400
+        
         username = user.get("username", "utente")
         collezione = get_collezione(user["id"])
-        esiste = any(s["spiritello"] == spiritello and s["variante"] == variante for s in collezione)
-        if esiste:
-            ok = elimina_spiritello(user["id"], spiritello, variante)
-            azione = "rimosso"
-        else:
-            ok = aggiungi_spiritello(user["id"], username, spiritello, variante)
-            azione = "aggiunto"
-        return jsonify({"ok": ok, "azione": azione})
+        
+        # ✅ TRANSAZIONE ATOMICA (evita race conditions)
+        try:
+            conn = get_db_connection()
+            if not conn:
+                return jsonify({"error": "Errore database"}), 500
+            
+            conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_SERIALIZABLE)
+            c = conn.cursor()
+            
+            # Verifica se esiste
+            c.execute(
+                "SELECT id FROM collezione WHERE user_id = %s AND spiritello = %s AND variante = %s",
+                (user["id"], spiritello, variante)
+            )
+            esiste = c.fetchone() is not None
+            
+            if esiste:
+                c.execute(
+                    "DELETE FROM collezione WHERE user_id = %s AND spiritello = %s AND variante = %s",
+                    (user["id"], spiritello, variante)
+                )
+                azione = "rimosso"
+            else:
+                c.execute(
+                    "INSERT INTO collezione (user_id, username, spiritello, variante) VALUES (%s, %s, %s, %s)",
+                    (user["id"], username, spiritello, variante)
+                )
+                azione = "aggiunto"
+            
+            conn.commit()
+            c.close()
+            conn.close()
+            
+            log_audit(user["id"], "toggle_sprite", f"{spiritello}-{variante}-{azione}")
+            logger.info(f"Toggle spiritello: user={user['id']}, spiritello={spiritello}, azione={azione}")
+            
+            return jsonify({"ok": True, "azione": azione})
+        
+        except psycopg2.Error as e:
+            logger.error(f"Errore transazione toggle: {str(e)}")
+            return jsonify({"error": "Errore database"}), 500
+    
     except Exception as e:
-        print("Errore toggle: " + str(e))
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"Errore toggle: {str(e)}")
+        return jsonify({"error": "Errore interno del server"}), 500
 
 @app.route("/api/invia-screenshot", methods=["POST"])
-@limiter.limit("10 per minute")
+@limiter.limit("3 per minute")
 def invia_screenshot():
+    """Riceve screenshot e lo invia al bot nella chat privata"""
     try:
         body = request.get_json()
         user = verifica_init_data(body.get("initData", ""))
-        if not user or user.get("id") == 0:
-            return jsonify({"error": "non autorizzato"}), 401
+        
+        # ✅ AUTENTICAZIONE RICHIESTA
+        if not user:
+            logger.warning("Tentativo invia_screenshot senza autenticazione")
+            return jsonify({"error": "Autenticazione richiesta"}), 401
+        
+        if not isinstance(user.get("id"), int) or user.get("id") <= 0:
+            return jsonify({"error": "ID utente non valido"}), 401
         
         image_data = body.get("screenshot")
         if not image_data:
-            return jsonify({"error": "nessuna immagine"}), 400
+            logger.warning("Nessuna immagine in invia_screenshot")
+            return jsonify({"error": "Nessuna immagine"}), 400
         
-        # Decodifica l'immagine base64
-        image_bytes = base64.b64decode(image_data.split(",")[1])
+        # ✅ VALIDAZIONE E DECODIFICA BASE64
+        try:
+            if "," in image_data:
+                image_bytes = base64.b64decode(image_data.split(",")[1])
+            else:
+                image_bytes = base64.b64decode(image_data)
+        except Exception as e:
+            logger.error(f"Errore decodifica base64: {str(e)}")
+            return jsonify({"error": "Immagine non valida"}), 400
         
-        # Invia l'immagine al bot nella chat privata
+        # ✅ VALIDAZIONE DIMENSIONE (max 5MB)
+        if len(image_bytes) > 5 * 1024 * 1024:
+            logger.warning(f"Immagine troppo grande: {len(image_bytes)} bytes")
+            return jsonify({"error": "Immagine troppo grande (max 5MB)"}), 400
+        
+        # ✅ INVIO IMMAGINE AL BOT
         bot = Bot(token=BOT_TOKEN)
         try:
             asyncio.run(bot.send_photo(
                 chat_id=user["id"],
                 photo=image_bytes,
-                caption="Ecco la mia collezione di Spiritelli! 🎮✨"
+                caption="Ecco la mia collezione di Spiritelli! By Fortnite_Italia_Leaks"
             ))
+            log_audit(user["id"], "create_screenshot", "")
+            logger.info(f"Screenshot inviato all'utente {user['id']}")
             return jsonify({"ok": True, "message": "Screenshot inviato!"})
         except Exception as e:
-            print("Errore invio immagine: " + str(e))
+            logger.error(f"Errore invio immagine al bot: {str(e)}")
             return jsonify({"error": "Errore invio immagine"}), 500
     
     except Exception as e:
-        print("Errore invia_screenshot: " + str(e))
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"Errore invia_screenshot: {str(e)}")
+        return jsonify({"error": "Errore interno del server"}), 500
 
+# ==================== ERROR HANDLERS ====================
+@app.errorhandler(400)
+def bad_request(error):
+    """Gestisce errori 400"""
+    logger.warning(f"Bad request: {str(error)}")
+    return jsonify({"error": "Richiesta non valida"}), 400
+
+@app.errorhandler(404)
+def not_found(error):
+    """Gestisce errori 404"""
+    logger.info(f"Risorsa non trovata: {request.path}")
+    return jsonify({"error": "Risorsa non trovata"}), 404
+
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    """Gestisce errori di rate limiting"""
+    logger.warning(f"Rate limit superato da {get_remote_address()}")
+    return jsonify({"error": "Troppe richieste. Riprova più tardi."}), 429
+
+@app.errorhandler(500)
+def internal_error(error):
+    """Gestisce errori 500 generici"""
+    logger.error(f"Errore interno non gestito: {str(error)}", exc_info=True)
+    return jsonify({"error": "Errore interno del server"}), 500
+
+# ==================== MAIN ====================
 if __name__ == "__main__":
+    logger.info("🚀 SpriteBot 2.0 avviato")
+    logger.info(f"Webhook path: {WEBHOOK_PATH}")
+    logger.info(f"Gruppo autorizzato: {GROUP_CHAT_ID}")
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
