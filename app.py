@@ -105,9 +105,37 @@ def log_audit(user_id, action, details=""):
     except Exception as e:
         logger.error(f"Errore audit log: {str(e)}")
 
+def upsert_utente(user_id, username):
+    """Inserisce l'utente se non esiste, altrimenti aggiorna lo username (tabella normalizzata)"""
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return False
+        c = conn.cursor()
+        try:
+            c.execute(
+                "INSERT INTO utenti (user_id, username) VALUES (%s, %s) "
+                "ON CONFLICT (user_id) DO UPDATE SET username = EXCLUDED.username, aggiornato_il = NOW()",
+                (user_id, username)
+            )
+            conn.commit()
+            return True
+        except psycopg2.Error as e:
+            conn.rollback()
+            logger.error(f"Errore upsert utente: {str(e)}")
+            return False
+        finally:
+            c.close()
+            conn.close()
+    except Exception as e:
+        logger.error(f"Errore DB upsert_utente: {str(e)}")
+        return False
+
 def aggiungi_spiritello(user_id, username, spiritello, variante):
     """Aggiunge uno spiritello alla collezione (transazione atomica)"""
     try:
+        upsert_utente(user_id, username)
+
         conn = get_db_connection()
         if not conn:
             return False
@@ -117,8 +145,8 @@ def aggiungi_spiritello(user_id, username, spiritello, variante):
         
         try:
             c.execute(
-                "INSERT INTO collezione (user_id, username, spiritello, variante) VALUES (%s, %s, %s, %s) ON CONFLICT (user_id, spiritello, variante) DO NOTHING",
-                (user_id, username, spiritello, variante)
+                "INSERT INTO collezione (user_id, spiritello, variante) VALUES (%s, %s, %s) ON CONFLICT (user_id, spiritello, variante) DO NOTHING",
+                (user_id, spiritello, variante)
             )
             conn.commit()
             inserted = c.rowcount > 0
@@ -429,6 +457,7 @@ def api_toggle():
             return jsonify({"error": "Dati non validi"}), 400
         
         username = user.get("username", "utente")
+        upsert_utente(user["id"], username)
         collezione = get_collezione(user["id"])
         
         try:
@@ -453,8 +482,8 @@ def api_toggle():
                 azione = "rimosso"
             else:
                 c.execute(
-                    "INSERT INTO collezione (user_id, username, spiritello, variante) VALUES (%s, %s, %s, %s)",
-                    (user["id"], username, spiritello, variante)
+                    "INSERT INTO collezione (user_id, spiritello, variante) VALUES (%s, %s, %s)",
+                    (user["id"], spiritello, variante)
                 )
                 azione = "aggiunto"
             
