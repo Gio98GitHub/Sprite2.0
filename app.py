@@ -14,7 +14,6 @@ from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 import asyncio
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from flask_talisman import Talisman
 
 # ==================== CONFIGURAZIONE LOGGING ====================
 logging.basicConfig(
@@ -41,18 +40,15 @@ if not all([BOT_TOKEN, GROUP_CHAT_ID, DATABASE_URL, WEBHOOK_SECRET]):
     raise ValueError("Mancano variabili d'ambiente critiche")
 
 # ==================== SECURITY HEADERS ====================
-Talisman(app, 
-    force_https=True,
-    strict_transport_security=True,
-    strict_transport_security_max_age=31536000,
-    content_security_policy={
-        'default-src': "'self'",
-        'script-src': ["'self'", "'unsafe-inline'", "cdnjs.cloudflare.com", "telegram.org"],
-        'style-src': ["'self'", "'unsafe-inline'", "fonts.googleapis.com"],
-        'font-src': ["'self'", "fonts.gstatic.com"],
-        'img-src': ["'self'", "data:", "https:"],
-    }
-)
+@app.after_request
+def set_security_headers(response):
+    """Aggiungi security headers manualmente"""
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline' cdnjs.cloudflare.com telegram.org; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src 'self' fonts.gstatic.com; img-src 'self' data: https:"
+    return response
 
 # ==================== RATE LIMITING ====================
 def get_user_id():
