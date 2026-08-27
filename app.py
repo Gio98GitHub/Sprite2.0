@@ -341,8 +341,12 @@ def telegram_webhook():
         if update and "message" in update:
             message = update["message"]
             
+            # ✅ LOGGING DETTAGLIATO PER DEBUG
+            logger.info(f"Message ricevuto completo: {json.dumps(message, indent=2)}")
+            logger.info(f"Campi presenti: {list(message.keys())}")
+            
             if not all(k in message for k in ["chat", "text"]):
-                logger.warning("Campi obbligatori mancanti nel messaggio")
+                logger.warning(f"Campi obbligatori mancanti - Presenti: {list(message.keys())}")
                 return jsonify({"status": "ok"}), 200
             
             text = message.get("text", "")
@@ -350,6 +354,8 @@ def telegram_webhook():
             message_id = message.get("message_id")
             user_id = message.get("from", {}).get("id")
             chat_type = message["chat"].get("type")
+            
+            logger.info(f"Parsing: text='{text}', chat_id={chat_id}, user_id={user_id}, chat_type={chat_type}")
             
             if text.startswith("/start"):
                 if chat_type == "group" or chat_type == "supergroup":
