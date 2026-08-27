@@ -370,54 +370,137 @@
             document.getElementById('spiritelli-table').style.display = 'table';
         }
 
-        async function toggle(spiritello, variante, boxElement) {
-            if (boxElement.classList.contains('pending')) return;
+       async function toggle(spiritello, variante, boxElement) {
+    if (boxElement.classList.contains('pending')) return;
 
-            const eraAttivo = boxElement.classList.contains('active');
-            const eraMastered = boxElement.classList.contains('mastered');
+    const eraAttivo = boxElement.classList.contains('active');
+    const eraMastered = boxElement.classList.contains('mastered');
 
-            // ✅ CASO 3: Mastered → Click → Elimina completamente
-            if (eraMastered) {
-                boxElement.classList.remove('active', 'mastered');
-                boxElement.classList.add('pending');
-                
-                try {
-                    const res = await fetch('/api/toggle', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({
-                            spiritello: spiritello,
-                            variante: variante,
-                            mastered: false,  // ✅ Invia mastered=false per ELIMINARE
-                            initData: tg.initData || initData
-                        })
-                    });
+    // ✅ CASO 3: Mastered (dorato) → Click → Elimina completamente
+    if (eraMastered) {
+        boxElement.classList.remove('active', 'mastered');
+        boxElement.classList.add('pending');
+        
+        try {
+            const res = await fetch('/api/toggle', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    spiritello: spiritello,
+                    variante: variante,
+                    mastered: false,  // ✅ Elimina
+                    initData: tg.initData || initData
+                })
+            });
 
-                    if (!res.ok) {
-                        if (res.status === 429) {
-                            mostraErrore('Troppe modifiche veloci, rallenta un attimo');
-                        } else {
-                            mostraErrore('Errore nel salvataggio, riprova');
-                        }
-                        boxElement.classList.add('mastered');
-                        return;
-                    }
-
-                    // ✅ ELIMINA dalla collezione locale
-                    collezione = collezione.filter(function(s) {
-                        return !(s.spiritello === spiritello && s.variante === variante);
-                    });
-
-                    if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-                } catch (e) {
-                    console.log("Errore rete: " + e.message);
-                    mostraErrore('Errore di connessione, riprova');
-                    boxElement.classList.add('mastered');
-                } finally {
-                    boxElement.classList.remove('pending');
+            if (!res.ok) {
+                if (res.status === 429) {
+                    mostraErrore('Troppe modifiche veloci, rallenta un attimo');
+                } else {
+                    mostraErrore('Errore nel salvataggio, riprova');
                 }
+                boxElement.classList.add('mastered');
                 return;
             }
+
+            // ✅ ELIMINA dalla collezione locale
+            collezione = collezione.filter(function(s) {
+                return !(s.spiritello === spiritello && s.variante === variante);
+            });
+
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+        } catch (e) {
+            console.log("Errore rete: " + e.message);
+            mostraErrore('Errore di connessione, riprova');
+            boxElement.classList.add('mastered');
+        } finally {
+            boxElement.classList.remove('pending');
+        }
+        return;
+    }
+
+    // ✅ CASO 2: Active (verde) + NON mastered → Click → Mastered (dorato)
+    if (eraAttivo && !eraMastered) {
+        boxElement.classList.remove('active');
+        boxElement.classList.add('mastered', 'pending');
+        
+        try {
+            const res = await fetch('/api/toggle', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    spiritello: spiritello,
+                    variante: variante,
+                    mastered: true,  // ✅ Mastera
+                    initData: tg.initData || initData
+                })
+            });
+
+            if (!res.ok) {
+                boxElement.classList.add('active');
+                boxElement.classList.remove('mastered');
+                mostraErrore('Errore nel salvataggio, riprova');
+                return;
+            }
+
+            // ✅ Aggiorna collezione locale
+            const item = collezione.find(function(s) {
+                return s.spiritello === spiritello && s.variante === variante;
+            });
+            if (item) item.mastered = true;
+
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+        } catch (e) {
+            console.log("Errore rete: " + e.message);
+            mostraErrore('Errore di connessione, riprova');
+            boxElement.classList.add('active');
+            boxElement.classList.remove('mastered');
+        } finally {
+            boxElement.classList.remove('pending');
+        }
+        return;
+    }
+
+    // ✅ CASO 1: Nessuno → Click → Active (verde)
+    boxElement.classList.add('active', 'pending');
+
+    try {
+        const res = await fetch('/api/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                spiritello: spiritello,
+                variante: variante,
+                mastered: false,  // ✅ Primo click = verde
+                initData: tg.initData || initData
+            })
+        });
+
+        if (!res.ok) {
+            if (res.status === 429) {
+                mostraErrore('Troppe modifiche veloci, rallenta un attimo');
+            } else {
+                mostraErrore('Errore nel salvataggio, riprova');
+            }
+            boxElement.classList.remove('active');
+            return;
+        }
+
+        collezione.push({
+            spiritello: spiritello,
+            variante: variante,
+            mastered: false
+        });
+
+        if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+    } catch (e) {
+        console.log("Errore rete: " + e.message);
+        mostraErrore('Errore di connessione, riprova');
+        boxElement.classList.remove('active');
+    } finally {
+        boxElement.classList.remove('pending');
+    }
+}
 
             // ✅ CASO 2: Active → Click → Mastered (SALVA mastered=true nel DB)
             if (eraAttivo) {
