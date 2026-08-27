@@ -357,7 +357,7 @@ def telegram_webhook():
             
             logger.info(f"Parsing: text='{text}', chat_id={chat_id}, user_id={user_id}, chat_type={chat_type}")
             
-            if text.startswith("/start"):
+            if text.startswith("/spritebot"):
                 if chat_type == "group" or chat_type == "supergroup":
                     asyncio.run(rispondi_comando_start(chat_id, message_id, user_id, Bot(token=BOT_TOKEN)))
                 elif chat_type == "private":
