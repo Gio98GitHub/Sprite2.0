@@ -3,4 +3,3 @@ python-telegram-bot
 psycopg2-binary
 gunicorn
 flask-limiter
-flask-talisman
