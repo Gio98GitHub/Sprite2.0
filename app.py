@@ -194,7 +194,9 @@ def verifica_init_data(init_data):
         
         parsed = dict(parse_qsl(init_data))
         received_hash = parsed.pop("hash", None)
-        auth_date = parsed.pop("auth_date", None)
+        # NON usare pop qui: auth_date deve restare in 'parsed' perche'
+        # fa parte dei campi che Telegram include nella stringa firmata
+        auth_date = parsed.get("auth_date")
         
         if not received_hash or not auth_date:
             logger.warning("Hash o auth_date mancanti in initData")
