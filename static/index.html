@@ -158,6 +158,12 @@
             box-shadow: 0 0 25px rgba(0, 255, 0, 1);
         }
         
+        .sprite-box.mastered {
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+            border-color: #FFD700;
+            box-shadow: 0 0 25px rgba(255, 215, 0, 1);
+        }
+        
         .sprite-box.pending {
             opacity: 0.5;
             cursor: wait;
@@ -337,13 +343,15 @@
                 row.innerHTML = '<td>' + spiritello + '</td>';
 
                 varianti.forEach(function(variante) {
-                    const possiede = collezione.some(function(s) {
+                    const item = collezione.find(function(s) {
                         return s.spiritello === spiritello && s.variante === variante;
                     });
+                    const possiede = item !== undefined;
+                    const mastered = possiede && item.mastered;  // ✅ NUOVO
 
                     const cell = document.createElement('td');
                     const box = document.createElement('div');
-                    box.className = 'sprite-box' + (possiede ? ' active' : '');
+                    box.className = 'sprite-box' + (mastered ? ' mastered' : (possiede ? ' active' : ''));
                     box.onclick = function() { toggle(spiritello, variante, box); };
 
                     const img = document.createElement('img');
@@ -363,19 +371,109 @@
         }
 
         async function toggle(spiritello, variante, boxElement) {
-            // Evita doppi click mentre una richiesta e' gia' in corso su questo riquadro
             if (boxElement.classList.contains('pending')) return;
 
             const eraAttivo = boxElement.classList.contains('active');
+            const eraMastered = boxElement.classList.contains('mastered');
 
-            // Stato di attesa: nessun cambio di colore finche' il server non conferma
-            boxElement.classList.add('pending');
+            // ✅ CASO 3: Mastered → Click → Elimina completamente
+            if (eraMastered) {
+                boxElement.classList.remove('active', 'mastered');
+                boxElement.classList.add('pending');
+                
+                try {
+                    const res = await fetch('/api/toggle', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            spiritello: spiritello,
+                            variante: variante,
+                            mastered: false,  // ✅ Invia mastered=false per ELIMINARE
+                            initData: tg.initData || initData
+                        })
+                    });
+
+                    if (!res.ok) {
+                        if (res.status === 429) {
+                            mostraErrore('Troppe modifiche veloci, rallenta un attimo');
+                        } else {
+                            mostraErrore('Errore nel salvataggio, riprova');
+                        }
+                        boxElement.classList.add('mastered');
+                        return;
+                    }
+
+                    // ✅ ELIMINA dalla collezione locale
+                    collezione = collezione.filter(function(s) {
+                        return !(s.spiritello === spiritello && s.variante === variante);
+                    });
+
+                    if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+                } catch (e) {
+                    console.log("Errore rete: " + e.message);
+                    mostraErrore('Errore di connessione, riprova');
+                    boxElement.classList.add('mastered');
+                } finally {
+                    boxElement.classList.remove('pending');
+                }
+                return;
+            }
+
+            // ✅ CASO 2: Active → Click → Mastered (SALVA mastered=true nel DB)
+            if (eraAttivo) {
+                boxElement.classList.remove('active');
+                boxElement.classList.add('mastered', 'pending');
+                
+                try {
+                    const res = await fetch('/api/toggle', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            spiritello: spiritello,
+                            variante: variante,
+                            mastered: true,  // ✅ Invia mastered=true
+                            initData: tg.initData || initData
+                        })
+                    });
+
+                    if (!res.ok) {
+                        boxElement.classList.add('active');
+                        boxElement.classList.remove('mastered');
+                        mostraErrore('Errore nel salvataggio, riprova');
+                        return;
+                    }
+
+                    // ✅ Aggiorna collezione locale
+                    const item = collezione.find(function(s) {
+                        return s.spiritello === spiritello && s.variante === variante;
+                    });
+                    if (item) item.mastered = true;
+
+                    if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+                } catch (e) {
+                    console.log("Errore rete: " + e.message);
+                    mostraErrore('Errore di connessione, riprova');
+                    boxElement.classList.add('active');
+                    boxElement.classList.remove('mastered');
+                } finally {
+                    boxElement.classList.remove('pending');
+                }
+                return;
+            }
+
+            // ✅ CASO 1: Nessuno → Click → Active (verde)
+            boxElement.classList.add('active', 'pending');
 
             try {
                 const res = await fetch('/api/toggle', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ spiritello: spiritello, variante: variante, initData: tg.initData || initData })
+                    body: JSON.stringify({
+                        spiritello: spiritello,
+                        variante: variante,
+                        mastered: false,  // ✅ Invia mastered=false
+                        initData: tg.initData || initData
+                    })
                 });
 
                 if (!res.ok) {
@@ -384,26 +482,21 @@
                     } else {
                         mostraErrore('Errore nel salvataggio, riprova');
                     }
+                    boxElement.classList.remove('active');
                     return;
                 }
 
-                const data = await res.json();
-
-                // Aggiorna la UI SOLO ora che il server ha confermato
-                if (data.azione === 'aggiunto') {
-                    boxElement.classList.add('active');
-                    collezione.push({ spiritello: spiritello, variante: variante });
-                } else if (data.azione === 'rimosso') {
-                    boxElement.classList.remove('active');
-                    collezione = collezione.filter(function(s) {
-                        return !(s.spiritello === spiritello && s.variante === variante);
-                    });
-                }
+                collezione.push({
+                    spiritello: spiritello,
+                    variante: variante,
+                    mastered: false  // ✅ Aggiungi alla collezione locale
+                });
 
                 if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
             } catch (e) {
                 console.log("Errore rete: " + e.message);
                 mostraErrore('Errore di connessione, riprova');
+                boxElement.classList.remove('active');
             } finally {
                 boxElement.classList.remove('pending');
             }
@@ -483,6 +576,11 @@
             errorDiv.className = 'error';
             errorDiv.textContent = msg;
             errorDiv.style.display = 'block';
+            
+            // Auto-nascondi dopo 3 secondi
+            setTimeout(function() {
+                errorDiv.style.display = 'none';
+            }, 3000);
         }
 
         function mostraSuccesso(msg) {
@@ -490,6 +588,11 @@
             errorDiv.className = 'success';
             errorDiv.textContent = msg;
             errorDiv.style.display = 'block';
+            
+            // Auto-nascondi dopo 3 secondi
+            setTimeout(function() {
+                errorDiv.style.display = 'none';
+            }, 3000);
         }
 
         document.getElementById('creaImmagineBtn').addEventListener('click', creaImmagine);
