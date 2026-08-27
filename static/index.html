@@ -158,6 +158,12 @@
             box-shadow: 0 0 25px rgba(0, 255, 0, 1);
         }
         
+        .sprite-box.pending {
+            opacity: 0.5;
+            cursor: wait;
+            border-color: rgba(255, 255, 0, 0.6);
+        }
+        
         .button-container {
             position: fixed;
             bottom: 15px;
@@ -357,39 +363,50 @@
         }
 
         async function toggle(spiritello, variante, boxElement) {
-            // Toggle IMMEDIATO visuale (ottimistico)
-            const isActive = boxElement.classList.contains('active');
-            if (isActive) {
-                boxElement.classList.remove('active');
-                collezione = collezione.filter(function(s) {
-                    return !(s.spiritello === spiritello && s.variante === variante);
+            // Evita doppi click mentre una richiesta e' gia' in corso su questo riquadro
+            if (boxElement.classList.contains('pending')) return;
+
+            const eraAttivo = boxElement.classList.contains('active');
+
+            // Stato di attesa: nessun cambio di colore finche' il server non conferma
+            boxElement.classList.add('pending');
+
+            try {
+                const res = await fetch('/api/toggle', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ spiritello: spiritello, variante: variante, initData: tg.initData || initData })
                 });
-            } else {
-                boxElement.classList.add('active');
-                collezione.push({ spiritello: spiritello, variante: variante });
-            }
 
-            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-
-            // Sincronizza con server in background (senza bloccare la UI)
-            fetch('/api/toggle', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ spiritello: spiritello, variante: variante, initData: tg.initData || initData })
-            }).then(function(res) {
                 if (!res.ok) {
-                    // Il server ha rifiutato la richiesta (401/429/400/500...):
-                    // la UI locale e' disallineata dal DB, riallinea ricaricando
-                    console.log("Sincronizzazione fallita: " + res.status);
                     if (res.status === 429) {
                         mostraErrore('Troppe modifiche veloci, rallenta un attimo');
+                    } else {
+                        mostraErrore('Errore nel salvataggio, riprova');
                     }
-                    carica();
+                    return;
                 }
-            }).catch(function(e) {
+
+                const data = await res.json();
+
+                // Aggiorna la UI SOLO ora che il server ha confermato
+                if (data.azione === 'aggiunto') {
+                    boxElement.classList.add('active');
+                    collezione.push({ spiritello: spiritello, variante: variante });
+                } else if (data.azione === 'rimosso') {
+                    boxElement.classList.remove('active');
+                    collezione = collezione.filter(function(s) {
+                        return !(s.spiritello === spiritello && s.variante === variante);
+                    });
+                }
+
+                if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            } catch (e) {
                 console.log("Errore rete: " + e.message);
-                carica();
-            });
+                mostraErrore('Errore di connessione, riprova');
+            } finally {
+                boxElement.classList.remove('pending');
+            }
         }
 
         async function creaImmagine() {
