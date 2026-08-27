@@ -231,6 +231,17 @@
             font-family: 'Fredoka', sans-serif;
             color: #ff6666;
         }
+
+        .success {
+            background: rgba(0, 255, 0, 0.2);
+            padding: 12px;
+            border-radius: 10px;
+            margin: 15px 0;
+            border: 2px solid rgba(0, 255, 0, 0.6);
+            font-size: 14px;
+            font-family: 'Fredoka', sans-serif;
+            color: #00ff88;
+        }
     </style>
 </head>
 <body>
@@ -345,32 +356,41 @@
             document.getElementById('spiritelli-table').style.display = 'table';
         }
 
-       async function toggle(spiritello, variante, boxElement) {
-    // Toggle IMMEDIATO visuale
-    const isActive = boxElement.classList.contains('active');
-    if (isActive) {
-        boxElement.classList.remove('active');
-        collezione = collezione.filter(function(s) {
-            return !(s.spiritello === spiritello && s.variante === variante);
-        });
-    } else {
-        boxElement.classList.add('active');
-        collezione.push({ spiritello: spiritello, variante: variante });
-    }
-    
-    if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-    
-    // Sincronizza con server in background (senza aspettare)
-    fetch('/api/toggle', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ spiritello: spiritello, variante: variante, initData: tg.initData || initData })
-    }).catch(function(e) {
-        console.log("Errore sincronizzazione: " + e.message);
-        // Se fallisce, ricarica la pagina
-        carica();
-    });
-}
+        async function toggle(spiritello, variante, boxElement) {
+            // Toggle IMMEDIATO visuale (ottimistico)
+            const isActive = boxElement.classList.contains('active');
+            if (isActive) {
+                boxElement.classList.remove('active');
+                collezione = collezione.filter(function(s) {
+                    return !(s.spiritello === spiritello && s.variante === variante);
+                });
+            } else {
+                boxElement.classList.add('active');
+                collezione.push({ spiritello: spiritello, variante: variante });
+            }
+
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+
+            // Sincronizza con server in background (senza bloccare la UI)
+            fetch('/api/toggle', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ spiritello: spiritello, variante: variante, initData: tg.initData || initData })
+            }).then(function(res) {
+                if (!res.ok) {
+                    // Il server ha rifiutato la richiesta (401/429/400/500...):
+                    // la UI locale e' disallineata dal DB, riallinea ricaricando
+                    console.log("Sincronizzazione fallita: " + res.status);
+                    if (res.status === 429) {
+                        mostraErrore('Troppe modifiche veloci, rallenta un attimo');
+                    }
+                    carica();
+                }
+            }).catch(function(e) {
+                console.log("Errore rete: " + e.message);
+                carica();
+            });
+        }
 
         async function creaImmagine() {
             const btn = document.getElementById('creaImmagineBtn');
@@ -431,7 +451,7 @@
 
                 if (!res.ok) throw new Error('Errore invio');
                 
-                mostraErrore('✓ Screenshot inviato nella chat!');
+                mostraSuccesso('✓ Screenshot inviato nella chat!');
                 
             } catch (e) {
                 mostraErrore('Errore: ' + e.message);
@@ -443,6 +463,14 @@
 
         function mostraErrore(msg) {
             const errorDiv = document.getElementById('error');
+            errorDiv.className = 'error';
+            errorDiv.textContent = msg;
+            errorDiv.style.display = 'block';
+        }
+
+        function mostraSuccesso(msg) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.className = 'success';
             errorDiv.textContent = msg;
             errorDiv.style.display = 'block';
         }
