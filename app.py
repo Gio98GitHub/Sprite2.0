@@ -158,68 +158,8 @@ def upsert_utente(user_id, username, conn=None):
         logger.error(f"Errore DB upsert_utente: {str(e)}")
         return False
 
-def aggiungi_spiritello(user_id, username, spiritello, variante):
-    """Aggiunge uno spiritello alla collezione. Usa un'unica connessione
-    per upsert utente + inserimento spiritello + audit (una sola transazione)."""
-    conn = get_db_connection()
-    if not conn:
-        return False
-    try:
-        conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_SERIALIZABLE)
-        upsert_utente(user_id, username, conn=conn)
-
-        c = conn.cursor()
-        try:
-            c.execute(
-                "INSERT INTO collezione (user_id, spiritello, variante) VALUES (%s, %s, %s) ON CONFLICT (user_id, spiritello, variante) DO NOTHING",
-                (user_id, spiritello, variante)
-            )
-            inserted = c.rowcount > 0
-            conn.commit()
-            return inserted
-        except psycopg2.Error as e:
-            conn.rollback()
-            logger.error(f"Errore inserimento spiritello: {str(e)}")
-            return False
-        finally:
-            c.close()
-    except Exception as e:
-        logger.error(f"Errore DB aggiungi_spiritello: {str(e)}")
-        return False
-    finally:
-        release_db_connection(conn)
-
-def elimina_spiritello(user_id, spiritello, variante):
-    """Elimina uno spiritello dalla collezione (transazione atomica)"""
-    conn = get_db_connection()
-    if not conn:
-        return False
-    try:
-        conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_SERIALIZABLE)
-        c = conn.cursor()
-        try:
-            c.execute(
-                "DELETE FROM collezione WHERE user_id = %s AND spiritello = %s AND variante = %s",
-                (user_id, spiritello, variante)
-            )
-            conn.commit()
-            deleted = c.rowcount > 0
-            return deleted
-        except psycopg2.Error as e:
-            conn.rollback()
-            logger.error(f"Errore eliminazione spiritello: {str(e)}")
-            return False
-        finally:
-            c.close()
-    except Exception as e:
-        logger.error(f"Errore DB elimina_spiritello: {str(e)}")
-        return False
-    finally:
-        release_db_connection(conn)
-
 def get_collezione(user_id, conn=None):
-    """Recupera la collezione dell'utente.
-    Se viene passata una connessione esistente, la riusa."""
+    """Recupera la collezione dell'utente con stato mastered."""
     conn_locale = conn is None
     try:
         if conn_locale:
@@ -228,12 +168,14 @@ def get_collezione(user_id, conn=None):
                 return []
         
         c = conn.cursor()
-        c.execute("SELECT spiritello, variante FROM collezione WHERE user_id = %s", (user_id,))
+        # ✅ AGGIUNTO: mastered
+        c.execute("SELECT spiritello, variante, mastered FROM collezione WHERE user_id = %s", (user_id,))
         rows = c.fetchall()
         c.close()
         if conn_locale:
             release_db_connection(conn)
-        return [{"spiritello": r[0], "variante": r[1]} for r in rows]
+        # ✅ AGGIUNTO: mastered nel JSON
+        return [{"spiritello": r[0], "variante": r[1], "mastered": r[2]} for r in rows]
     except Exception as e:
         logger.error(f"Errore get_collezione: {str(e)}")
         return []
@@ -252,8 +194,6 @@ def verifica_init_data(init_data):
         
         parsed = dict(parse_qsl(init_data))
         received_hash = parsed.pop("hash", None)
-        # NON usare pop qui: auth_date deve restare in 'parsed' perche'
-        # fa parte dei campi che Telegram include nella stringa firmata
         auth_date = parsed.get("auth_date")
         
         if not received_hash or not auth_date:
@@ -480,6 +420,7 @@ def api_toggle():
         
         spiritello = body.get("spiritello")
         variante = body.get("variante")
+        is_mastered = body.get("mastered", False)  # ✅ NUOVO: ricevi mastered
         
         if not isinstance(spiritello, str) or not isinstance(variante, str):
             logger.warning(f"Tipi non validi: spiritello={type(spiritello)}, variante={type(variante)}")
@@ -506,33 +447,50 @@ def api_toggle():
             
             c = conn.cursor()
             
+            # ✅ VERIFICARE se esiste
             c.execute(
-                "SELECT id FROM collezione WHERE user_id = %s AND spiritello = %s AND variante = %s",
+                "SELECT id, mastered FROM collezione WHERE user_id = %s AND spiritello = %s AND variante = %s",
                 (user["id"], spiritello, variante)
             )
-            esiste = c.fetchone() is not None
+            result = c.fetchone()
+            esiste = result is not None
             
-            if esiste:
+            if not esiste:
+                # ✅ Inserisci nuovo (mastered = is_mastered)
                 c.execute(
-                    "DELETE FROM collezione WHERE user_id = %s AND spiritello = %s AND variante = %s",
-                    (user["id"], spiritello, variante)
-                )
-                azione = "rimosso"
-            else:
-                c.execute(
-                    "INSERT INTO collezione (user_id, spiritello, variante) VALUES (%s, %s, %s)",
-                    (user["id"], spiritello, variante)
+                    "INSERT INTO collezione (user_id, spiritello, variante, mastered) VALUES (%s, %s, %s, %s)",
+                    (user["id"], spiritello, variante, is_mastered)
                 )
                 azione = "aggiunto"
+                nuovo_mastered = is_mastered
+            else:
+                # ✅ Se esiste ma is_mastered=False, elimina
+                # Se esiste e is_mastered=True, aggiorna mastered flag
+                if is_mastered:
+                    # Aggiorna solo il flag mastered
+                    c.execute(
+                        "UPDATE collezione SET mastered = %s WHERE user_id = %s AND spiritello = %s AND variante = %s",
+                        (True, user["id"], spiritello, variante)
+                    )
+                    azione = "mastered"
+                    nuovo_mastered = True
+                else:
+                    # Elimina completamente
+                    c.execute(
+                        "DELETE FROM collezione WHERE user_id = %s AND spiritello = %s AND variante = %s",
+                        (user["id"], spiritello, variante)
+                    )
+                    azione = "rimosso"
+                    nuovo_mastered = False
             
-            log_audit(user["id"], "toggle_sprite", f"{spiritello}-{variante}-{azione}", conn=conn)
+            log_audit(user["id"], "toggle_sprite", f"{spiritello}-{variante}-{azione}-mastered={is_mastered}", conn=conn)
             
             conn.commit()
             c.close()
             
-            logger.info(f"Toggle spiritello: user={user['id']}, spiritello={spiritello}, azione={azione}")
+            logger.info(f"Toggle spiritello: user={user['id']}, spiritello={spiritello}, azione={azione}, mastered={is_mastered}")
             
-            return jsonify({"ok": True, "azione": azione})
+            return jsonify({"ok": True, "azione": azione, "mastered": nuovo_mastered})
         
         except psycopg2.Error as e:
             conn.rollback()
