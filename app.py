@@ -276,23 +276,7 @@ async def rispondi_comando_start(chat_id, message_id, user_id, bot):
 
 async def rispondi_comando_chat_privata(chat_id, message_id):
     """Risponde a /start nella chat privata con il bot"""
-    bot = Bot(token=BOT_TOKEN)
-    link_web_app = "https://sprite2-0.onrender.com/"
-    testo_risposta = "SpriteBot 2.0\n\nGestisci la tua collezione di Spiritelli!"
-    testo_bottone = "Apri App"
-    webapp_info = WebAppInfo(url=link_web_app)
-    tastiera = InlineKeyboardMarkup([[InlineKeyboardButton(testo_bottone, web_app=webapp_info)]])
-    
-    try:
-        await bot.send_message(
-            chat_id=chat_id,
-            text=testo_risposta,
-            parse_mode="HTML",
-            reply_markup=tastiera
-        )
-        logger.info(f"WebApp aperta per user {chat_id}")
-    except Exception as e:
-        logger.error(f"Errore invio messaggio privato: {str(e)}")
+   
 
 # ==================== ROUTES ====================
 @app.route("/")
