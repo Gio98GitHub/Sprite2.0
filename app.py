@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 # ==================== INIZIALIZZAZIONE APP ====================
 app = Flask(__name__, static_folder="static")
-app.config['MAX_CONTENT_LENGTH'] = 6 * 1024 * 1024  # 6MB, con margine sopra il limite base64 di 5MB
+app.config['MAX_CONTENT_LENGTH'] = 6 * 1024 * 1024
 
 # ==================== VARIABILI AMBIENTE ====================
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
@@ -75,7 +75,7 @@ limiter = Limiter(
 # ==================== COSTANTI ====================
 VARIANTI = ["Base", "Oro", "Maestro dei Trucchi"]
 SPIRITELLI = ["Sonic", "8-Bit", "Corona", "Cespuglio", "Klombo", "Tails", "Shadow", "Avventura", "Killswitch", "Jackrabbit", "Jonesy"]
-INITDATA_EXPIRY = 3600  # 1 ora
+INITDATA_EXPIRY = 3600
 
 # ==================== DATABASE ====================
 db_pool = psycopg2.pool.ThreadedConnectionPool(
@@ -94,7 +94,7 @@ def get_db_connection():
         return None
 
 def release_db_connection(conn):
-    """Rilascia la connessione nel pool invece di chiuderla"""
+    """Rilascia la connessione nel pool"""
     if conn:
         try:
             db_pool.putconn(conn)
@@ -102,9 +102,7 @@ def release_db_connection(conn):
             logger.error(f"Errore rilascio connessione al pool: {str(e)}")
 
 def log_audit(user_id, action, details="", conn=None):
-    """Registra le azioni dell'utente per audit.
-    Se viene passata una connessione esistente, la riusa (stessa transazione)
-    invece di aprirne una nuova dal pool."""
+    """Registra le azioni dell'utente per audit"""
     conn_locale = conn is None
     try:
         if conn_locale:
@@ -127,8 +125,7 @@ def log_audit(user_id, action, details="", conn=None):
         logger.error(f"Errore audit log: {str(e)}")
 
 def upsert_utente(user_id, username, conn=None):
-    """Inserisce l'utente se non esiste, altrimenti aggiorna lo username.
-    Se viene passata una connessione esistente, la riusa invece di aprirne una nuova."""
+    """Inserisce l'utente se non esiste, altrimenti aggiorna lo username"""
     conn_locale = conn is None
     try:
         if conn_locale:
@@ -159,7 +156,7 @@ def upsert_utente(user_id, username, conn=None):
         return False
 
 def get_collezione(user_id, conn=None):
-    """Recupera la collezione dell'utente con stato mastered."""
+    """Recupera la collezione dell'utente con stato mastered"""
     conn_locale = conn is None
     try:
         if conn_locale:
@@ -168,26 +165,87 @@ def get_collezione(user_id, conn=None):
                 return []
         
         c = conn.cursor()
-        # ✅ AGGIUNTO: mastered
         c.execute("SELECT spiritello, variante, mastered FROM collezione WHERE user_id = %s", (user_id,))
         rows = c.fetchall()
         c.close()
         if conn_locale:
             release_db_connection(conn)
-        # ✅ AGGIUNTO: mastered nel JSON
         return [{"spiritello": r[0], "variante": r[1], "mastered": r[2]} for r in rows]
     except Exception as e:
         logger.error(f"Errore get_collezione: {str(e)}")
         return []
 
+def get_statistiche_utente(user_id):
+    """Recupera statistiche dell'utente"""
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return None
+        
+        c = conn.cursor()
+        c.execute("""
+            SELECT 
+                COUNT(*) as posseduti,
+                SUM(CASE WHEN mastered = true THEN 1 ELSE 0 END) as masterati
+            FROM collezione 
+            WHERE user_id = %s
+        """, (user_id,))
+        result = c.fetchone()
+        c.close()
+        release_db_connection(conn)
+        
+        posseduti = result[0] if result[0] else 0
+        masterati = result[1] if result[1] else 0
+        
+        return {
+            "posseduti": posseduti,
+            "masterati": masterati,
+            "totali": 33,
+            "percentuale": round((posseduti / 33) * 100, 1)
+        }
+    except Exception as e:
+        logger.error(f"Errore get_statistiche: {str(e)}")
+        return None
+
+def get_top_5_leaderboard():
+    """Recupera top 5 utenti per spiritelli masterati"""
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return []
+        
+        c = conn.cursor()
+        c.execute("""
+            SELECT 
+                user_id,
+                username,
+                COUNT(*) as totali,
+                SUM(CASE WHEN mastered = true THEN 1 ELSE 0 END) as masterati
+            FROM collezione
+            GROUP BY user_id, username
+            ORDER BY masterati DESC
+            LIMIT 5
+        """)
+        rows = c.fetchall()
+        c.close()
+        release_db_connection(conn)
+        
+        return [
+            {
+                "user_id": r[0],
+                "username": r[1],
+                "totali": r[2],
+                "masterati": r[3]
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        logger.error(f"Errore get_top_5: {str(e)}")
+        return []
+
 # ==================== AUTENTICAZIONE ====================
 def verifica_init_data(init_data):
-    """
-    Verifica e decodifica l'initData di Telegram WebApp
-    - Valida la firma HMAC-SHA256
-    - Controlla la scadenza (max 1 ora)
-    - Estrae i dati dell'utente
-    """
+    """Verifica e decodifica l'initData di Telegram"""
     try:
         if not init_data or not isinstance(init_data, str):
             return None
@@ -200,7 +258,6 @@ def verifica_init_data(init_data):
             logger.warning("Hash o auth_date mancanti in initData")
             return None
         
-        # CONTROLLO SCADENZA (Validita': 1 ora)
         try:
             auth_timestamp = int(auth_date)
             current_time = int(time.time())
@@ -211,7 +268,6 @@ def verifica_init_data(init_data):
             logger.warning("auth_date non e' un numero valido")
             return None
         
-        # VERIFICA FIRMA HMAC-SHA256
         data_check_string = "\n".join(k + "=" + v for k, v in sorted(parsed.items()))
         secret_key = hmac.new("WebAppData".encode(), BOT_TOKEN.encode(), hashlib.sha256).digest()
         calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
@@ -220,7 +276,6 @@ def verifica_init_data(init_data):
             logger.warning("Firma HMAC non valida")
             return None
         
-        # ESTRAZIONE DATI UTENTE
         user_data = parsed.get("user")
         if not user_data:
             logger.warning("Nessun dato utente in initData")
@@ -228,7 +283,6 @@ def verifica_init_data(init_data):
         
         try:
             user = json.loads(user_data)
-            # VALIDAZIONE ID UTENTE
             if not isinstance(user.get("id"), int) or user.get("id") <= 0:
                 logger.warning(f"ID utente non valido: {user.get('id')}")
                 return None
@@ -249,8 +303,8 @@ def verifica_gruppo_autorizzato(chat_id):
     return True
 
 # ==================== BOT COMMANDS ====================
-async def rispondi_comando_start(chat_id, message_id, user_id, bot):
-    """Risponde a /start - ACCESSIBILE A TUTTI nel gruppo autorizzato"""
+async def rispondi_comando_spritebot(chat_id, message_id, user_id, bot):
+    """Risponde a /spritebot nel gruppo"""
     
     if not verifica_gruppo_autorizzato(chat_id):
         return
@@ -269,14 +323,203 @@ async def rispondi_comando_start(chat_id, message_id, user_id, bot):
             reply_to_message_id=message_id,
             reply_markup=tastiera
         )
-        log_audit(user_id, "used_start_command", f"chat_id={chat_id}")
-        logger.info(f"/start eseguito da user {user_id} nel gruppo {chat_id}")
+        log_audit(user_id, "used_spritebot_command", f"chat_id={chat_id}")
+        logger.info(f"/spritebot eseguito da user {user_id} nel gruppo {chat_id}")
     except Exception as e:
         logger.error(f"Errore invio messaggio: {str(e)}")
 
-async def rispondi_comando_chat_privata(chat_id, message_id):
-    """Risponde a /start nella chat privata con il bot"""
-   
+async def rispondi_comando_stats(chat_id, user_id, bot):
+    """Risponde a /stats con le statistiche dell'utente"""
+    
+    stats = get_statistiche_utente(user_id)
+    
+    if not stats:
+        try:
+            await bot.send_message(chat_id=chat_id, text="❌ Errore nel caricamento delle statistiche")
+        except Exception as e:
+            logger.error(f"Errore invio stats: {str(e)}")
+        return
+    
+    testo = f"""📊 **Le tue statistiche:**
+
+🎮 Spiritelli posseduti: **{stats['posseduti']}/{stats['totali']}**
+⭐ Spiritelli masterati: **{stats['masterati']}/{stats['totali']}**
+📈 Completamento: **{stats['percentuale']}%**
+"""
+    
+    try:
+        await bot.send_message(chat_id=chat_id, text=testo, parse_mode="Markdown")
+        log_audit(user_id, "viewed_stats", "")
+        logger.info(f"/stats visualizzato da user {user_id}")
+    except Exception as e:
+        logger.error(f"Errore invio stats: {str(e)}")
+
+async def rispondi_comando_leaderboard(chat_id, bot):
+    """Risponde a /leaderboard con top 5"""
+    
+    top_5 = get_top_5_leaderboard()
+    
+    if not top_5:
+        try:
+            await bot.send_message(chat_id=chat_id, text="❌ Nessun dato disponibile")
+        except Exception as e:
+            logger.error(f"Errore invio leaderboard: {str(e)}")
+        return
+    
+    testo = "🏆 **Top 5 Leaderboard**\n\n"
+    
+    for i, user in enumerate(top_5, 1):
+        testo += f"{i}. @{user['username']} - ⭐ {user['masterati']}/{user['totali']} masterati\n"
+    
+    try:
+        await bot.send_message(chat_id=chat_id, text=testo, parse_mode="Markdown")
+        logger.info(f"/leaderboard visualizzato nel chat {chat_id}")
+    except Exception as e:
+        logger.error(f"Errore invio leaderboard: {str(e)}")
+
+async def rispondi_comando_mancanti(chat_id, user_id, bot):
+    """Crea uno screenshot degli spiritelli mancanti"""
+    
+    collezione = get_collezione(user_id)
+    posseduti = set((s["spiritello"], s["variante"]) for s in collezione)
+    
+    mancanti = []
+    for spiritello in SPIRITELLI:
+        for variante in VARIANTI:
+            if (spiritello, variante) not in posseduti:
+                mancanti.append((spiritello, variante))
+    
+    if not mancanti:
+        try:
+            await bot.send_message(chat_id=chat_id, text="✅ Non ti mancano spiritelli! Collezione completa!")
+        except Exception as e:
+            logger.error(f"Errore invio mancanti: {str(e)}")
+        return
+    
+    # Crea HTML per screenshot
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body {{
+                font-family: 'Fredoka', sans-serif;
+                background: #0a0028;
+                padding: 20px;
+                margin: 0;
+            }}
+            .header {{
+                text-align: center;
+                color: #00ffff;
+                font-size: 24px;
+                margin-bottom: 20px;
+                text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                background: rgba(0, 0, 0, 0.8);
+                border: 2px solid rgba(0, 255, 255, 0.6);
+                border-radius: 10px;
+                overflow: hidden;
+            }}
+            th {{
+                background: rgba(255, 0, 255, 0.2);
+                color: #00ffff;
+                padding: 15px;
+                text-align: center;
+                border-bottom: 2px solid rgba(0, 255, 255, 0.5);
+                font-size: 14px;
+            }}
+            td {{
+                padding: 10px;
+                text-align: center;
+                border-bottom: 1px solid rgba(255, 0, 255, 0.1);
+                color: #fff;
+            }}
+            td:first-child {{
+                text-align: left;
+                color: #ff00ff;
+                font-weight: bold;
+            }}
+            img {{
+                width: 70px;
+                height: 70px;
+                object-fit: contain;
+            }}
+            .watermark {{
+                text-align: center;
+                margin-top: 20px;
+                font-size: 10px;
+                color: rgba(0, 255, 255, 0.4);
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">🔍 Spiritelli Mancanti</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>SPIRITELLO</th>
+                    <th>BASE</th>
+                    <th>ORO</th>
+                    <th>MAESTRO DEI TRUCCHI</th>
+                </tr>
+            </thead>
+            <tbody>
+    """
+    
+    # Raggruppa per spiritello
+    spiritelli_mancanti = {}
+    for spiritello, variante in mancanti:
+        if spiritello not in spiritelli_mancanti:
+            spiritelli_mancanti[spiritello] = []
+        spiritelli_mancanti[spiritello].append(variante)
+    
+    for spiritello in SPIRITELLI:
+        if spiritello not in spiritelli_mancanti:
+            continue
+        
+        html_content += f"<tr><td>{spiritello}</td>"
+        
+        for variante in VARIANTI:
+            if variante in spiritelli_mancanti[spiritello]:
+                img_name = spiritello.lower().replace(' ', '-') + '-' + variante.lower().replace(' ', '-')
+                html_content += f'<td><img src="https://sprite2-0.onrender.com/static/spiritelli/{img_name}.png" alt="{variante}"></td>'
+            else:
+                html_content += "<td>-</td>"
+        
+        html_content += "</tr>"
+    
+    html_content += """
+            </tbody>
+        </table>
+        <div class="watermark">By Fortnite_Italia_Leaks on Telegram</div>
+    </body>
+    </html>
+    """
+    
+    try:
+        from io import BytesIO
+        import subprocess
+        
+        # Crea immagine da HTML usando html2canvas via API
+        # Per ora, invia un messaggio di testo
+        testo = f"📋 **Spiritelli Mancanti ({len(mancanti)}/33):**\n\n"
+        
+        current_spiritello = None
+        for spiritello, variante in mancanti:
+            if spiritello != current_spiritello:
+                testo += f"\n**{spiritello}:**\n"
+                current_spiritello = spiritello
+            testo += f"• {variante}\n"
+        
+        await bot.send_message(chat_id=chat_id, text=testo, parse_mode="Markdown")
+        log_audit(user_id, "viewed_mancanti", f"count={len(mancanti)}")
+        logger.info(f"/mancanti visualizzato da user {user_id}: {len(mancanti)} mancanti")
+    except Exception as e:
+        logger.error(f"Errore invio mancanti: {str(e)}")
 
 # ==================== ROUTES ====================
 @app.route("/")
@@ -325,7 +568,6 @@ def telegram_webhook():
         if update and "message" in update:
             message = update["message"]
             
-            # ✅ LOGGING DETTAGLIATO PER DEBUG
             logger.info(f"Message ricevuto completo: {json.dumps(message, indent=2)}")
             logger.info(f"Campi presenti: {list(message.keys())}")
             
@@ -341,11 +583,17 @@ def telegram_webhook():
             
             logger.info(f"Parsing: text='{text}', chat_id={chat_id}, user_id={user_id}, chat_type={chat_type}")
             
+            bot = Bot(token=BOT_TOKEN)
+            
             if text.startswith("/spritebot"):
                 if chat_type == "group" or chat_type == "supergroup":
-                    asyncio.run(rispondi_comando_start(chat_id, message_id, user_id, Bot(token=BOT_TOKEN)))
-                elif chat_type == "private":
-                    asyncio.run(rispondi_comando_chat_privata(chat_id, message_id))
+                    asyncio.run(rispondi_comando_spritebot(chat_id, message_id, user_id, bot))
+            elif text.startswith("/stats"):
+                asyncio.run(rispondi_comando_stats(chat_id, user_id, bot))
+            elif text.startswith("/leaderboard"):
+                asyncio.run(rispondi_comando_leaderboard(chat_id, bot))
+            elif text.startswith("/mancanti"):
+                asyncio.run(rispondi_comando_mancanti(chat_id, user_id, bot))
         
         return jsonify({"status": "ok"}), 200
     
@@ -410,7 +658,7 @@ def api_toggle():
         
         spiritello = body.get("spiritello")
         variante = body.get("variante")
-        is_mastered = body.get("mastered", False)  # ✅ NUOVO: ricevi mastered
+        is_mastered = body.get("mastered", False)
         
         if not isinstance(spiritello, str) or not isinstance(variante, str):
             logger.warning(f"Tipi non validi: spiritello={type(spiritello)}, variante={type(variante)}")
@@ -437,7 +685,6 @@ def api_toggle():
             
             c = conn.cursor()
             
-            # ✅ VERIFICARE se esiste
             c.execute(
                 "SELECT id, mastered FROM collezione WHERE user_id = %s AND spiritello = %s AND variante = %s",
                 (user["id"], spiritello, variante)
@@ -446,7 +693,6 @@ def api_toggle():
             esiste = result is not None
             
             if not esiste:
-                # ✅ Inserisci nuovo (mastered = is_mastered)
                 c.execute(
                     "INSERT INTO collezione (user_id, spiritello, variante, mastered) VALUES (%s, %s, %s, %s)",
                     (user["id"], spiritello, variante, is_mastered)
@@ -454,10 +700,7 @@ def api_toggle():
                 azione = "aggiunto"
                 nuovo_mastered = is_mastered
             else:
-                # ✅ Se esiste ma is_mastered=False, elimina
-                # Se esiste e is_mastered=True, aggiorna mastered flag
                 if is_mastered:
-                    # Aggiorna solo il flag mastered
                     c.execute(
                         "UPDATE collezione SET mastered = %s WHERE user_id = %s AND spiritello = %s AND variante = %s",
                         (True, user["id"], spiritello, variante)
@@ -465,7 +708,6 @@ def api_toggle():
                     azione = "mastered"
                     nuovo_mastered = True
                 else:
-                    # Elimina completamente
                     c.execute(
                         "DELETE FROM collezione WHERE user_id = %s AND spiritello = %s AND variante = %s",
                         (user["id"], spiritello, variante)
@@ -559,7 +801,7 @@ def not_found(error):
 
 @app.errorhandler(413)
 def request_too_large(error):
-    """Gestisce richieste troppo grandi (MAX_CONTENT_LENGTH superato)"""
+    """Gestisce richieste troppo grandi"""
     logger.warning(f"Richiesta troppo grande da {get_remote_address()}")
     return jsonify({"error": "Richiesta troppo grande"}), 413
 
