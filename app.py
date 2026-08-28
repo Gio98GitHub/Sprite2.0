@@ -159,8 +159,7 @@ def upsert_utente(user_id, username, conn=None):
         return False
 
 def get_collezione(user_id, conn=None):
-    """Recupera la collezione dell'utente, incluso lo stato mastered.
-    Se viene passata una connessione esistente, la riusa."""
+    """Recupera la collezione dell'utente con stato mastered."""
     conn_locale = conn is None
     try:
         if conn_locale:
@@ -169,12 +168,14 @@ def get_collezione(user_id, conn=None):
                 return []
         
         c = conn.cursor()
+        # ✅ AGGIUNTO: mastered
         c.execute("SELECT spiritello, variante, mastered FROM collezione WHERE user_id = %s", (user_id,))
         rows = c.fetchall()
         c.close()
         if conn_locale:
             release_db_connection(conn)
-        return [{"spiritello": r[0], "variante": r[1], "mastered": bool(r[2])} for r in rows]
+        # ✅ AGGIUNTO: mastered nel JSON
+        return [{"spiritello": r[0], "variante": r[1], "mastered": r[2]} for r in rows]
     except Exception as e:
         logger.error(f"Errore get_collezione: {str(e)}")
         return []
@@ -193,8 +194,6 @@ def verifica_init_data(init_data):
         
         parsed = dict(parse_qsl(init_data))
         received_hash = parsed.pop("hash", None)
-        # NON usare pop qui: auth_date deve restare in 'parsed' perche'
-        # fa parte dei campi che Telegram include nella stringa firmata
         auth_date = parsed.get("auth_date")
         
         if not received_hash or not auth_date:
@@ -251,7 +250,7 @@ def verifica_gruppo_autorizzato(chat_id):
 
 # ==================== BOT COMMANDS ====================
 async def rispondi_comando_start(chat_id, message_id, user_id, bot):
-    """Risponde a /spritebot - ACCESSIBILE A TUTTI nel gruppo autorizzato"""
+    """Risponde a /start - ACCESSIBILE A TUTTI nel gruppo autorizzato"""
     
     if not verifica_gruppo_autorizzato(chat_id):
         return
@@ -271,12 +270,12 @@ async def rispondi_comando_start(chat_id, message_id, user_id, bot):
             reply_markup=tastiera
         )
         log_audit(user_id, "used_start_command", f"chat_id={chat_id}")
-        logger.info(f"/spritebot eseguito da user {user_id} nel gruppo {chat_id}")
+        logger.info(f"/start eseguito da user {user_id} nel gruppo {chat_id}")
     except Exception as e:
         logger.error(f"Errore invio messaggio: {str(e)}")
 
 async def rispondi_comando_chat_privata(chat_id, message_id):
-    """Risponde a /spritebot nella chat privata con il bot"""
+    """Risponde a /start nella chat privata con il bot"""
     bot = Bot(token=BOT_TOKEN)
     link_web_app = "https://sprite2-0.onrender.com/"
     testo_risposta = "SpriteBot 2.0\n\nGestisci la tua collezione di Spiritelli!"
@@ -307,24 +306,16 @@ def home():
 
 @app.route("/static/<path:path>")
 def static_files(path):
-    """Serve file statici, con cache lunga per le immagini (non cambiano spesso)"""
+    """Serve file statici"""
     try:
-        response = send_from_directory("static", path)
-        if path.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
-            response.headers['Cache-Control'] = 'public, max-age=604800, immutable'  # 7 giorni
-        return response
+        return send_from_directory("static", path)
     except Exception as e:
         logger.error(f"Errore caricamento file statico {path}: {str(e)}")
         return jsonify({"error": "File non trovato"}), 404
 
 @app.route(WEBHOOK_PATH, methods=["POST"])
-@limiter.exempt
 def telegram_webhook():
-    """Webhook per ricevere aggiornamenti da Telegram.
-    Esente dal rate limiter: e' gia' protetto dal secret token, e tutte le
-    richieste arrivano dietro il proxy di Render con lo stesso IP sorgente
-    (127.0.0.1) - condividerebbero quindi lo stesso limite di un singolo
-    "utente" e rischierebbero di autobloccare il bot durante picchi di traffico."""
+    """Webhook per ricevere aggiornamenti da Telegram"""
     try:
         header_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
         if not header_secret:
@@ -350,8 +341,12 @@ def telegram_webhook():
         if update and "message" in update:
             message = update["message"]
             
+            # ✅ LOGGING DETTAGLIATO PER DEBUG
+            logger.info(f"Message ricevuto completo: {json.dumps(message, indent=2)}")
+            logger.info(f"Campi presenti: {list(message.keys())}")
+            
             if not all(k in message for k in ["chat", "text"]):
-                logger.warning("Campi obbligatori mancanti nel messaggio")
+                logger.warning(f"Campi obbligatori mancanti - Presenti: {list(message.keys())}")
                 return jsonify({"status": "ok"}), 200
             
             text = message.get("text", "")
@@ -359,6 +354,8 @@ def telegram_webhook():
             message_id = message.get("message_id")
             user_id = message.get("from", {}).get("id")
             chat_type = message["chat"].get("type")
+            
+            logger.info(f"Parsing: text='{text}', chat_id={chat_id}, user_id={user_id}, chat_type={chat_type}")
             
             if text.startswith("/spritebot"):
                 if chat_type == "group" or chat_type == "supergroup":
@@ -415,10 +412,7 @@ def api_collezione():
 @app.route("/api/toggle", methods=["POST"])
 @limiter.limit("30 per minute")
 def api_toggle():
-    """Toggle a 3 stati (nessuno -> posseduto -> mastered -> nessuno).
-    Lo stato successivo e' deciso SEMPRE dal server in base a quello che
-    e' effettivamente salvato nel DB, non da un flag mandato dal client:
-    cosi' la UI non puo' mai desincronizzarsi da quello che e' salvato."""
+    """Toggle uno spiritello nella collezione (richiede autenticazione)"""
     try:
         body = request.get_json()
         user = verifica_init_data(body.get("initData", ""))
@@ -432,6 +426,7 @@ def api_toggle():
         
         spiritello = body.get("spiritello")
         variante = body.get("variante")
+        is_mastered = body.get("mastered", False)  # ✅ NUOVO: ricevi mastered
         
         if not isinstance(spiritello, str) or not isinstance(variante, str):
             logger.warning(f"Tipi non validi: spiritello={type(spiritello)}, variante={type(variante)}")
@@ -458,49 +453,50 @@ def api_toggle():
             
             c = conn.cursor()
             
-            # Legge lo stato attuale: nessuna riga / posseduto (mastered=false) / mastered (mastered=true)
+            # ✅ VERIFICARE se esiste
             c.execute(
-                "SELECT mastered FROM collezione WHERE user_id = %s AND spiritello = %s AND variante = %s",
+                "SELECT id, mastered FROM collezione WHERE user_id = %s AND spiritello = %s AND variante = %s",
                 (user["id"], spiritello, variante)
             )
-            riga = c.fetchone()
+            result = c.fetchone()
+            esiste = result is not None
             
-            if riga is None:
-                # Stato 0 (nessuno) -> Stato 1 (posseduto)
+            if not esiste:
+                # ✅ Inserisci nuovo (mastered = is_mastered)
                 c.execute(
-                    "INSERT INTO collezione (user_id, spiritello, variante, mastered) VALUES (%s, %s, %s, FALSE)",
-                    (user["id"], spiritello, variante)
+                    "INSERT INTO collezione (user_id, spiritello, variante, mastered) VALUES (%s, %s, %s, %s)",
+                    (user["id"], spiritello, variante, is_mastered)
                 )
                 azione = "aggiunto"
-                posseduto = True
-                mastered = False
-            elif riga[0] is False:
-                # Stato 1 (posseduto) -> Stato 2 (mastered)
-                c.execute(
-                    "UPDATE collezione SET mastered = TRUE WHERE user_id = %s AND spiritello = %s AND variante = %s",
-                    (user["id"], spiritello, variante)
-                )
-                azione = "mastered"
-                posseduto = True
-                mastered = True
+                nuovo_mastered = is_mastered
             else:
-                # Stato 2 (mastered) -> Stato 0 (nessuno): elimina la riga del tutto
-                c.execute(
-                    "DELETE FROM collezione WHERE user_id = %s AND spiritello = %s AND variante = %s",
-                    (user["id"], spiritello, variante)
-                )
-                azione = "rimosso"
-                posseduto = False
-                mastered = False
+                # ✅ Se esiste ma is_mastered=False, elimina
+                # Se esiste e is_mastered=True, aggiorna mastered flag
+                if is_mastered:
+                    # Aggiorna solo il flag mastered
+                    c.execute(
+                        "UPDATE collezione SET mastered = %s WHERE user_id = %s AND spiritello = %s AND variante = %s",
+                        (True, user["id"], spiritello, variante)
+                    )
+                    azione = "mastered"
+                    nuovo_mastered = True
+                else:
+                    # Elimina completamente
+                    c.execute(
+                        "DELETE FROM collezione WHERE user_id = %s AND spiritello = %s AND variante = %s",
+                        (user["id"], spiritello, variante)
+                    )
+                    azione = "rimosso"
+                    nuovo_mastered = False
             
-            log_audit(user["id"], "toggle_sprite", f"{spiritello}-{variante}-{azione}", conn=conn)
+            log_audit(user["id"], "toggle_sprite", f"{spiritello}-{variante}-{azione}-mastered={is_mastered}", conn=conn)
             
             conn.commit()
             c.close()
             
-            logger.info(f"Toggle spiritello: user={user['id']}, spiritello={spiritello}, azione={azione}")
+            logger.info(f"Toggle spiritello: user={user['id']}, spiritello={spiritello}, azione={azione}, mastered={is_mastered}")
             
-            return jsonify({"ok": True, "azione": azione, "posseduto": posseduto, "mastered": mastered})
+            return jsonify({"ok": True, "azione": azione, "mastered": nuovo_mastered})
         
         except psycopg2.Error as e:
             conn.rollback()
