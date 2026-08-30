@@ -212,23 +212,31 @@ def get_top_5_leaderboard():
     try:
         conn = get_db_connection()
         if not conn:
+            logger.error("❌ DB connection is None")
             return []
         
         c = conn.cursor()
+        # Query semplificata - prima conta i masterati manualmente
         c.execute("""
             SELECT 
-                user_id,
-                username,
-                COUNT(*) as totali,
-                SUM(CASE WHEN mastered = true THEN 1 ELSE 0 END) as masterati
-            FROM collezione
-            GROUP BY user_id, username
+                c.user_id,
+                u.username,
+                COUNT(c.id) as totali,
+                COUNT(CASE WHEN c.mastered = true THEN 1 END) as masterati
+            FROM collezione c
+            LEFT JOIN utenti u ON c.user_id = u.user_id
+            GROUP BY c.user_id, u.username
             ORDER BY masterati DESC
             LIMIT 5
         """)
         rows = c.fetchall()
+        logger.info(f"✅ Leaderboard: {len(rows)} rows returned")
         c.close()
         release_db_connection(conn)
+        
+        if not rows:
+            logger.warning("⚠️ No rows returned from leaderboard query")
+            return []
         
         return [
             {
@@ -240,7 +248,7 @@ def get_top_5_leaderboard():
             for r in rows
         ]
     except Exception as e:
-        logger.error(f"Errore get_top_5: {str(e)}")
+        logger.error(f"❌ Leaderboard error: {str(e)}", exc_info=True)
         return []
 
 # ==================== AUTENTICAZIONE ====================
