@@ -74,7 +74,7 @@ limiter = Limiter(
 
 # ==================== COSTANTI ====================
 VARIANTI = ["Base", "Oro", "Maestro dei Trucchi"]
-SPIRITELLI = ["Sonic", "8-Bit", "Corona", "Cespuglio", "Klombo", "Tails", "Shadow", "Avventura", "Killswitch", "Jackrabbit", "Jonesy"]
+SPIRITELLI = ["Sonic", "8-Bit", "Corona", "Cespuglio", "Klombo", "Tails", "Shadow", "Avventura", "Killswitch", "Jackrabbit", "Jonesy", "Tempesta"]
 INITDATA_EXPIRY = 3600
 
 # ==================== DATABASE ====================
@@ -200,8 +200,8 @@ def get_statistiche_utente(user_id):
         return {
             "posseduti": posseduti,
             "masterati": masterati,
-            "totali": 33,
-            "percentuale": round((posseduti / 33) * 100, 1)
+            "totali": 36,
+            "percentuale": round((posseduti / 36) * 100, 1)
         }
     except Exception as e:
         logger.error(f"Errore get_statistiche: {str(e)}")
@@ -377,8 +377,8 @@ async def rispondi_comando_leaderboard(chat_id, bot):
     except Exception as e:
         logger.error(f"Errore invio leaderboard: {str(e)}")
 
-async def rispondi_comando_mancanti(chat_id, user_id, bot):
-    """Crea uno screenshot degli spiritelli mancanti"""
+async def rispondi_comando_mancanti(chat_id, user_id, username, bot):
+    """Crea uno screenshot degli spiritelli mancanti con emoji"""
     
     collezione = get_collezione(user_id)
     posseduti = set((s["spiritello"], s["variante"]) for s in collezione)
@@ -391,129 +391,33 @@ async def rispondi_comando_mancanti(chat_id, user_id, bot):
     
     if not mancanti:
         try:
-            await bot.send_message(chat_id=chat_id, text="✅ Non ti mancano spiritelli! Collezione completa!")
+            await bot.send_message(chat_id=chat_id, text=f"✅ @{username} Non ti mancano spiritelli! Collezione completa! 🎉")
         except Exception as e:
             logger.error(f"Errore invio mancanti: {str(e)}")
         return
     
-    # Crea HTML per screenshot
-    html_content = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <style>
-            body {{
-                font-family: 'Fredoka', sans-serif;
-                background: #0a0028;
-                padding: 20px;
-                margin: 0;
-            }}
-            .header {{
-                text-align: center;
-                color: #00ffff;
-                font-size: 24px;
-                margin-bottom: 20px;
-                text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
-            }}
-            table {{
-                width: 100%;
-                border-collapse: collapse;
-                background: rgba(0, 0, 0, 0.8);
-                border: 2px solid rgba(0, 255, 255, 0.6);
-                border-radius: 10px;
-                overflow: hidden;
-            }}
-            th {{
-                background: rgba(255, 0, 255, 0.2);
-                color: #00ffff;
-                padding: 15px;
-                text-align: center;
-                border-bottom: 2px solid rgba(0, 255, 255, 0.5);
-                font-size: 14px;
-            }}
-            td {{
-                padding: 10px;
-                text-align: center;
-                border-bottom: 1px solid rgba(255, 0, 255, 0.1);
-                color: #fff;
-            }}
-            td:first-child {{
-                text-align: left;
-                color: #ff00ff;
-                font-weight: bold;
-            }}
-            img {{
-                width: 70px;
-                height: 70px;
-                object-fit: contain;
-            }}
-            .watermark {{
-                text-align: center;
-                margin-top: 20px;
-                font-size: 10px;
-                color: rgba(0, 255, 255, 0.4);
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="header">🔍 Spiritelli Mancanti</div>
-        <table>
-            <thead>
-                <tr>
-                    <th>SPIRITELLO</th>
-                    <th>BASE</th>
-                    <th>ORO</th>
-                    <th>MAESTRO DEI TRUCCHI</th>
-                </tr>
-            </thead>
-            <tbody>
-    """
-    
-    # Raggruppa per spiritello
-    spiritelli_mancanti = {}
-    for spiritello, variante in mancanti:
-        if spiritello not in spiritelli_mancanti:
-            spiritelli_mancanti[spiritello] = []
-        spiritelli_mancanti[spiritello].append(variante)
-    
-    for spiritello in SPIRITELLI:
-        if spiritello not in spiritelli_mancanti:
-            continue
-        
-        html_content += f"<tr><td>{spiritello}</td>"
-        
-        for variante in VARIANTI:
-            if variante in spiritelli_mancanti[spiritello]:
-                img_name = spiritello.lower().replace(' ', '-') + '-' + variante.lower().replace(' ', '-')
-                html_content += f'<td><img src="https://sprite2-0.onrender.com/static/spiritelli/{img_name}.png" alt="{variante}"></td>'
-            else:
-                html_content += "<td>-</td>"
-        
-        html_content += "</tr>"
-    
-    html_content += """
-            </tbody>
-        </table>
-        <div class="watermark">By Fortnite_Italia_Leaks on Telegram</div>
-    </body>
-    </html>
-    """
-    
     try:
-        from io import BytesIO
-        import subprocess
-        
-        # Crea immagine da HTML usando html2canvas via API
-        # Per ora, invia un messaggio di testo
-        testo = f"📋 **Spiritelli Mancanti ({len(mancanti)}/33):**\n\n"
+        # Crea messaggio di testo con emoji
+        testo = f"🔍 **Spiritelli Mancanti di @{username}**\n\n"
+        testo += f"📊 Mancanti: **{len(mancanti)}/36** spiritelli\n\n"
         
         current_spiritello = None
         for spiritello, variante in mancanti:
             if spiritello != current_spiritello:
-                testo += f"\n**{spiritello}:**\n"
+                testo += f"\n🎮 **{spiritello}:**\n"
                 current_spiritello = spiritello
-            testo += f"• {variante}\n"
+            
+            # Aggiungi emoji per variante
+            if variante == "Base":
+                emoji = "⚪"
+            elif variante == "Oro":
+                emoji = "🟡"
+            else:  # Maestro dei Trucchi
+                emoji = "⭐"
+            
+            testo += f"{emoji} {variante}\n"
+        
+        testo += f"\n_By Fortnite_Italia_Leaks on Telegram_"
         
         await bot.send_message(chat_id=chat_id, text=testo, parse_mode="Markdown")
         log_audit(user_id, "viewed_mancanti", f"count={len(mancanti)}")
@@ -593,7 +497,8 @@ def telegram_webhook():
             elif text.startswith("/leaderboard"):
                 asyncio.run(rispondi_comando_leaderboard(chat_id, bot))
             elif text.startswith("/mancanti"):
-                asyncio.run(rispondi_comando_mancanti(chat_id, user_id, bot))
+                username = message.get("from", {}).get("username", "Utente")
+                asyncio.run(rispondi_comando_mancanti(chat_id, user_id, username, bot))
         
         return jsonify({"status": "ok"}), 200
     
