@@ -212,37 +212,47 @@ def get_top_5_leaderboard():
     try:
         conn = get_db_connection()
         if not conn:
+            logger.error("❌ DB connection is None")
             return []
         
         c = conn.cursor()
-        c.execute("""
+        query = """
             SELECT 
-                user_id,
-                username,
+                c.user_id,
+                u.username,
                 COUNT(*) as totali,
-                SUM(CASE WHEN mastered = true THEN 1 ELSE 0 END) as masterati
-            FROM collezione
-            GROUP BY user_id, username
+                SUM(CASE WHEN c.mastered = true THEN 1 ELSE 0 END) as masterati
+            FROM collezione c
+            LEFT JOIN utenti u ON c.user_id = u.user_id
+            GROUP BY c.user_id, u.username
             ORDER BY masterati DESC
             LIMIT 5
-        """)
+        """
+        logger.info(f"Executing query: {query}")
+        c.execute(query)
         rows = c.fetchall()
+        logger.info(f"✅ Query returned {len(rows)} rows: {rows}")
         c.close()
         release_db_connection(conn)
         
-        return [
-            {
+        if not rows:
+            logger.warning("⚠️ Query returned empty result")
+            return []
+        
+        result = []
+        for r in rows:
+            logger.info(f"Row: user_id={r[0]}, username={r[1]}, totali={r[2]}, masterati={r[3]}")
+            result.append({
                 "user_id": r[0],
                 "username": r[1],
                 "totali": r[2],
                 "masterati": r[3]
-            }
-            for r in rows
-        ]
+            })
+        
+        return result
     except Exception as e:
-        logger.error(f"Errore get_top_5: {str(e)}")
+        logger.error(f"❌ Errore get_top_5: {str(e)}", exc_info=True)
         return []
-
 # ==================== AUTENTICAZIONE ====================
 def verifica_init_data(init_data):
     """Verifica e decodifica l'initData di Telegram"""
