@@ -212,47 +212,37 @@ def get_top_5_leaderboard():
     try:
         conn = get_db_connection()
         if not conn:
-            logger.error("❌ DB connection is None")
             return []
         
         c = conn.cursor()
-        query = """
+        c.execute("""
             SELECT 
-                c.user_id,
-                u.username,
+                user_id,
+                username,
                 COUNT(*) as totali,
-                SUM(CASE WHEN c.mastered = true THEN 1 ELSE 0 END) as masterati
-            FROM collezione c
-            LEFT JOIN utenti u ON c.user_id = u.user_id
-            GROUP BY c.user_id, u.username
+                SUM(CASE WHEN mastered = true THEN 1 ELSE 0 END) as masterati
+            FROM collezione
+            GROUP BY user_id, username
             ORDER BY masterati DESC
             LIMIT 5
-        """
-        logger.info(f"Executing query: {query}")
-        c.execute(query)
+        """)
         rows = c.fetchall()
-        logger.info(f"✅ Query returned {len(rows)} rows: {rows}")
         c.close()
         release_db_connection(conn)
         
-        if not rows:
-            logger.warning("⚠️ Query returned empty result")
-            return []
-        
-        result = []
-        for r in rows:
-            logger.info(f"Row: user_id={r[0]}, username={r[1]}, totali={r[2]}, masterati={r[3]}")
-            result.append({
+        return [
+            {
                 "user_id": r[0],
                 "username": r[1],
                 "totali": r[2],
                 "masterati": r[3]
-            })
-        
-        return result
+            }
+            for r in rows
+        ]
     except Exception as e:
-        logger.error(f"❌ Errore get_top_5: {str(e)}", exc_info=True)
+        logger.error(f"Errore get_top_5: {str(e)}")
         return []
+
 # ==================== AUTENTICAZIONE ====================
 def verifica_init_data(init_data):
     """Verifica e decodifica l'initData di Telegram"""
@@ -376,10 +366,10 @@ async def rispondi_comando_leaderboard(chat_id, bot):
             logger.error(f"Errore invio leaderboard: {str(e)}")
         return
     
-    testo = "🏆 **Top 5 Leaderboard**\n\n"
+    testo = "🏆 **Top 5 utenti con più spiritelli masterati:**\n\n"
     
     for i, user in enumerate(top_5, 1):
-        testo += f"{i}. @{user['username']} - ⭐ {user['masterati']}/36 masterati\n"
+        testo += f"{i}. {user['username']} - ⭐ {user['masterati']}/36\n"
     
     try:
         await bot.send_message(chat_id=chat_id, text=testo, parse_mode="Markdown")
