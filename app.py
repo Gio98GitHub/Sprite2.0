@@ -68,7 +68,7 @@ def get_user_id():
 limiter = Limiter(
     key_func=get_user_id,
     app=app,
-    default_limits=["200 per day", "50 per hour"],
+    default_limits=["1000 per day", "200 per hour"],  # ← AUMENTATO
     storage_uri="memory://"
 )
 
