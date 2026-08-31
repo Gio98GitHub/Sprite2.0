@@ -10,13 +10,23 @@
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         
+        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-20px); } }
+        @keyframes glow { 0%, 100% { filter: drop-shadow(0 0 20px rgba(0, 255, 255, 0.5)); } 50% { filter: drop-shadow(0 0 40px rgba(0, 255, 255, 0.8)); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        @keyframes shimmer { 0% { background-position: -1000px 0; } 100% { background-position: 1000px 0; } }
+        @keyframes slideInDown { from { transform: translateY(-30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes slideInUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes rotateIn { from { transform: rotate(-10deg) scale(0.8); opacity: 0; } to { transform: rotate(0) scale(1); opacity: 1; } }
+        @keyframes particleFloat { 0% { transform: translateY(0) translateX(0); opacity: 1; } 100% { transform: translateY(-100px) translateX(20px); opacity: 0; } }
+        
         body {
             font-family: 'Fredoka', sans-serif;
-            background: url('/static/background.png') center/cover no-repeat fixed;
+            background: linear-gradient(135deg, #0a0028 0%, #1a0040 50%, #0f0020 100%);
             min-height: 100vh;
             padding: 15px;
             color: #fff;
             position: relative;
+            overflow-x: hidden;
         }
         
         body::before {
@@ -26,9 +36,12 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 20, 0.3);
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(0, 255, 255, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(255, 0, 255, 0.05) 0%, transparent 50%);
             pointer-events: none;
             z-index: 1;
+            animation: pulse 8s ease-in-out infinite;
         }
         
         .container {
@@ -36,68 +49,89 @@
             margin: 0 auto;
             position: relative;
             z-index: 2;
-            padding-bottom: 80px;
+            padding-bottom: 100px;
         }
         
         .header {
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 30px;
+            animation: slideInDown 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
         
         h1 {
             font-family: 'Bangers', cursive;
-            font-size: 48px;
+            font-size: 56px;
             font-weight: 700;
-            text-shadow: 3px 3px 0px rgba(255, 0, 255, 0.8), 6px 6px 0px rgba(0, 255, 255, 0.6);
-            margin-bottom: 5px;
-            letter-spacing: 2px;
+            background: linear-gradient(135deg, #ff00ff, #00ffff, #ff00ff);
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 40px rgba(255, 0, 255, 0.5), 0 0 80px rgba(0, 255, 255, 0.3);
+            margin-bottom: 10px;
+            letter-spacing: 3px;
+            animation: glow 3s ease-in-out infinite;
+            filter: drop-shadow(0 0 30px rgba(255, 0, 255, 0.4));
         }
         
         .subtitle {
-            font-size: 16px;
+            font-size: 18px;
             color: rgba(255, 255, 255, 0.95);
-            margin-bottom: 5px;
             font-weight: 600;
-            font-family: 'Fredoka', sans-serif;
-            text-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
+            text-shadow: 0 0 15px rgba(255, 0, 255, 0.6), 0 0 30px rgba(0, 255, 255, 0.3);
+            letter-spacing: 1px;
+            animation: slideInUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s backwards;
         }
         
         .table-wrapper {
-            background: rgba(0, 0, 0, 0.7);
-            border-radius: 15px;
-            overflow-x: auto;
-            box-shadow: 0 0 30px rgba(255, 0, 255, 0.5), 0 0 60px rgba(0, 255, 255, 0.3);
-            padding: 10px;
-            border: 2px solid rgba(255, 0, 255, 0.3);
-            margin-bottom: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 
+                0 0 60px rgba(255, 0, 255, 0.3),
+                0 0 120px rgba(0, 255, 255, 0.2),
+                inset 0 0 60px rgba(255, 0, 255, 0.05);
+            padding: 15px;
+            border: 2px solid rgba(0, 255, 255, 0.3);
+            margin-bottom: 30px;
+            animation: slideInUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.4s backwards;
+            transition: all 0.3s ease;
+        }
+        
+        .table-wrapper:hover {
+            box-shadow: 
+                0 0 80px rgba(255, 0, 255, 0.5),
+                0 0 160px rgba(0, 255, 255, 0.3),
+                inset 0 0 60px rgba(255, 0, 255, 0.1);
+            border-color: rgba(0, 255, 255, 0.6);
         }
         
         table {
             width: 100%;
             border-collapse: collapse;
-            background: rgba(10, 10, 40, 0.8);
+            background: rgba(10, 10, 40, 0.5);
             min-width: 600px;
         }
         
         thead {
-            background: rgba(255, 0, 255, 0.2);
-            position: static;
-            top: 0;
-            border-bottom: 2px solid rgba(0, 255, 255, 0.5);
+            background: linear-gradient(90deg, rgba(255, 0, 255, 0.15) 0%, rgba(0, 255, 255, 0.15) 100%);
+            border-bottom: 3px solid rgba(0, 255, 255, 0.4);
         }
         
         th {
-            padding: 20px 8px;
+            padding: 22px 12px;
             text-align: center;
             font-weight: 700;
-            font-size: 11px;
-            font-family: 'Fredoka', sans-serif;
+            font-size: 12px;
             color: #00ffff;
-            text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
-            height: 60px;
+            text-shadow: 0 0 15px rgba(0, 255, 255, 0.8);
+            height: 70px;
             white-space: normal;
             word-break: break-word;
             vertical-align: middle;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
         }
         
         th:first-child {
@@ -105,69 +139,122 @@
         }
         
         td {
-            padding: 12px 8px;
+            padding: 16px 10px;
             text-align: center;
-            border-bottom: 1px solid rgba(255, 0, 255, 0.1);
+            border-bottom: 1px solid rgba(255, 0, 255, 0.08);
+            transition: all 0.2s ease;
         }
         
         td:first-child {
             text-align: left;
             font-weight: 600;
-            min-width: 100px;
-            font-family: 'Fredoka', sans-serif;
+            min-width: 110px;
             color: #ff00ff;
+            text-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
+        }
+        
+        tr {
+            transition: all 0.3s ease;
         }
         
         tr:hover {
-            background: rgba(255, 0, 255, 0.1);
+            background: rgba(255, 0, 255, 0.12);
+            box-shadow: inset 0 0 20px rgba(0, 255, 255, 0.1);
         }
         
         .sprite-box {
             width: 70px;
             height: 70px;
             margin: 0 auto;
-            background: rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.7);
             border: 2px solid rgba(0, 255, 255, 0.5);
-            border-radius: 8px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
             position: relative;
             overflow: hidden;
+            box-shadow: 0 0 25px rgba(0, 255, 255, 0.2);
+        }
+        
+        .sprite-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s ease;
+        }
+        
+        .sprite-box:hover::before {
+            left: 100%;
         }
         
         .sprite-box:hover {
             border-color: rgba(255, 0, 255, 0.8);
-            background: rgba(255, 0, 255, 0.1);
-            transform: scale(1.05);
-            box-shadow: 0 0 15px rgba(255, 0, 255, 0.6);
+            background: rgba(255, 0, 255, 0.15);
+            transform: scale(1.08) translateY(-5px);
+            box-shadow: 
+                0 0 40px rgba(255, 0, 255, 0.6),
+                0 10px 30px rgba(255, 0, 255, 0.3);
+            filter: drop-shadow(0 0 15px rgba(255, 0, 255, 0.5));
         }
         
         .sprite-box img {
             width: 100%;
             height: 100%;
             object-fit: contain;
-            padding: 3px;
+            padding: 4px;
+            transition: all 0.3s ease;
+        }
+        
+        .sprite-box:hover img {
+            filter: brightness(1.2);
         }
         
         .sprite-box.active {
             background: linear-gradient(135deg, #00ff00 0%, #00cc00 100%);
             border-color: #00ff00;
-            box-shadow: 0 0 25px rgba(0, 255, 0, 1);
+            box-shadow: 
+                0 0 40px rgba(0, 255, 0, 0.8),
+                0 10px 30px rgba(0, 255, 0, 0.4),
+                inset 0 0 30px rgba(0, 255, 0, 0.2);
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        .sprite-box.active:hover {
+            box-shadow: 
+                0 0 60px rgba(0, 255, 0, 1),
+                0 15px 40px rgba(0, 255, 0, 0.5),
+                inset 0 0 30px rgba(0, 255, 0, 0.3);
         }
         
         .sprite-box.mastered {
             background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
             border-color: #FFD700;
-            box-shadow: 0 0 25px rgba(255, 215, 0, 1);
+            box-shadow: 
+                0 0 40px rgba(255, 215, 0, 0.8),
+                0 10px 30px rgba(255, 215, 0, 0.4),
+                inset 0 0 30px rgba(255, 215, 0, 0.2);
+            animation: float 2.5s ease-in-out infinite;
+        }
+        
+        .sprite-box.mastered:hover {
+            box-shadow: 
+                0 0 60px rgba(255, 215, 0, 1),
+                0 15px 40px rgba(255, 215, 0, 0.5),
+                inset 0 0 30px rgba(255, 215, 0, 0.3);
         }
         
         .sprite-box.pending {
-            opacity: 0.5;
+            opacity: 0.6;
             cursor: wait;
             border-color: rgba(255, 255, 0, 0.6);
+            animation: pulse 0.6s ease-in-out infinite;
         }
         
         .button-container {
@@ -176,28 +263,51 @@
             left: 15px;
             right: 15px;
             z-index: 10;
+            animation: slideInUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.6s backwards;
         }
         
         .crea-immagine-btn {
             width: 100%;
-            padding: 15px;
+            padding: 18px;
             background: linear-gradient(135deg, #00ff00 0%, #00cc00 100%);
             border: 2px solid #00ff00;
-            border-radius: 10px;
+            border-radius: 15px;
             color: #000;
-            font-size: 16px;
+            font-size: 17px;
             font-weight: 700;
             font-family: 'Fredoka', sans-serif;
             cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.8);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 
+                0 0 30px rgba(0, 255, 0, 0.6),
+                0 10px 30px rgba(0, 255, 0, 0.3);
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 2px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .crea-immagine-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.3);
+            transition: left 0.6s ease;
+        }
+        
+        .crea-immagine-btn:hover::before {
+            left: 100%;
         }
         
         .crea-immagine-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 30px rgba(0, 255, 0, 1);
+            transform: scale(1.05) translateY(-3px);
+            box-shadow: 
+                0 0 50px rgba(0, 255, 0, 0.8),
+                0 15px 40px rgba(0, 255, 0, 0.5);
+            filter: drop-shadow(0 0 20px rgba(0, 255, 0, 0.6));
         }
         
         .crea-immagine-btn:active {
@@ -205,54 +315,61 @@
         }
         
         .crea-immagine-btn:disabled {
-            opacity: 0.6;
+            opacity: 0.5;
             cursor: not-allowed;
             transform: scale(1);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
         }
         
         .watermark {
             position: fixed;
-            bottom: 80px;
-            right: 10px;
-            font-size: 8px;
-            color: rgba(0, 255, 255, 0.4);
+            bottom: 95px;
+            right: 12px;
+            font-size: 9px;
+            color: rgba(0, 255, 255, 0.35);
             font-family: 'Fredoka', sans-serif;
             text-align: right;
-            text-shadow: 0 0 3px rgba(0, 255, 255, 0.3);
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
             z-index: 5;
-            max-width: 80px;
+            max-width: 85px;
             line-height: 1.2;
+            animation: pulse 4s ease-in-out infinite;
         }
         
         .loading {
             text-align: center;
-            padding: 40px;
-            font-size: 16px;
+            padding: 50px 20px;
+            font-size: 18px;
             font-family: 'Fredoka', sans-serif;
             color: #00ffff;
-            text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+            text-shadow: 0 0 20px rgba(0, 255, 255, 0.8);
+            animation: pulse 1.5s ease-in-out infinite;
         }
         
         .error {
-            background: rgba(255, 0, 0, 0.3);
-            padding: 12px;
-            border-radius: 10px;
+            background: rgba(255, 0, 0, 0.15);
+            padding: 15px;
+            border-radius: 12px;
             margin: 15px 0;
-            border: 2px solid rgba(255, 0, 0, 0.6);
-            font-size: 14px;
+            border: 2px solid rgba(255, 0, 0, 0.5);
+            font-size: 15px;
             font-family: 'Fredoka', sans-serif;
             color: #ff6666;
+            box-shadow: 0 0 30px rgba(255, 0, 0, 0.2);
+            animation: slideInDown 0.4s ease-out;
         }
 
         .success {
-            background: rgba(0, 255, 0, 0.2);
-            padding: 12px;
-            border-radius: 10px;
+            background: rgba(0, 255, 0, 0.15);
+            padding: 15px;
+            border-radius: 12px;
             margin: 15px 0;
-            border: 2px solid rgba(0, 255, 0, 0.6);
-            font-size: 14px;
+            border: 2px solid rgba(0, 255, 0, 0.5);
+            font-size: 15px;
             font-family: 'Fredoka', sans-serif;
             color: #00ff88;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.2);
+            animation: slideInDown 0.4s ease-out;
         }
 
         .info-btn {
@@ -260,31 +377,33 @@
             top: 65px;
             left: 15px;
             z-index: 15;
-            width: 38px;
-            height: 38px;
-            background: rgba(0, 255, 255, 0.2);
+            width: 42px;
+            height: 42px;
+            background: rgba(0, 255, 255, 0.15);
             border: 2px solid rgba(0, 255, 255, 0.8);
-            border-radius: 8px;
+            border-radius: 12px;
             color: #00ffff;
-            font-size: 18px;
+            font-size: 20px;
             cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.4);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 0 25px rgba(0, 255, 255, 0.3);
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: bold;
             padding: 0;
+            animation: rotateIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
 
         .info-btn:hover {
-            background: rgba(0, 255, 255, 0.4);
-            box-shadow: 0 0 30px rgba(0, 255, 255, 0.8);
-            transform: scale(1.1);
+            background: rgba(0, 255, 255, 0.3);
+            box-shadow: 0 0 45px rgba(0, 255, 255, 0.8);
+            transform: scale(1.15) rotateZ(10deg);
+            filter: drop-shadow(0 0 15px rgba(0, 255, 255, 0.6));
         }
 
         .info-btn:active {
-            transform: scale(0.95);
+            transform: scale(0.95) rotateZ(10deg);
         }
 
         .modal-overlay {
@@ -294,11 +413,15 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
             z-index: 100;
             align-items: center;
             justify-content: center;
+            animation: fadeIn 0.3s ease-out;
         }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
         .modal-overlay.active {
             display: flex;
@@ -306,26 +429,31 @@
 
         .modal-content {
             background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(20px);
             border: 2px solid rgba(0, 255, 255, 0.6);
-            border-radius: 15px;
-            padding: 30px;
-            max-width: 400px;
+            border-radius: 20px;
+            padding: 35px;
+            max-width: 420px;
             width: 90%;
-            box-shadow: 0 0 40px rgba(0, 255, 255, 0.5), 0 0 80px rgba(255, 0, 255, 0.3);
+            box-shadow: 
+                0 0 60px rgba(0, 255, 255, 0.5),
+                0 0 120px rgba(255, 0, 255, 0.3),
+                inset 0 0 60px rgba(0, 255, 255, 0.05);
             position: relative;
+            animation: slideInUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
 
         .modal-close-btn {
             position: absolute;
-            top: 12px;
-            right: 12px;
-            width: 35px;
-            height: 35px;
-            background: rgba(255, 0, 0, 0.3);
+            top: 15px;
+            right: 15px;
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 0, 0, 0.25);
             border: 2px solid rgba(255, 0, 0, 0.6);
             border-radius: 50%;
             color: #ff6666;
-            font-size: 24px;
+            font-size: 26px;
             cursor: pointer;
             transition: all 0.3s ease;
             display: flex;
@@ -337,24 +465,25 @@
 
         .modal-close-btn:hover {
             background: rgba(255, 0, 0, 0.5);
-            box-shadow: 0 0 15px rgba(255, 0, 0, 0.6);
-            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.6);
+            transform: scale(1.15) rotateZ(-90deg);
         }
 
         .modal-title {
             color: #00ffff;
-            font-size: 22px;
+            font-size: 24px;
             font-weight: 700;
-            text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
-            margin-bottom: 20px;
+            text-shadow: 0 0 15px rgba(0, 255, 255, 0.8);
+            margin-bottom: 22px;
             text-align: center;
+            letter-spacing: 1px;
         }
 
         .modal-text {
             color: rgba(255, 255, 255, 0.9);
-            font-size: 14px;
+            font-size: 15px;
             font-family: 'Fredoka', sans-serif;
-            line-height: 1.8;
+            line-height: 1.9;
         }
 
         .modal-text ul {
@@ -364,10 +493,18 @@
         }
 
         .modal-text li {
-            margin: 12px 0;
-            padding-left: 20px;
+            margin: 14px 0;
+            padding-left: 24px;
             position: relative;
+            animation: slideInUp 0.4s ease-out;
+            animation-fill-mode: backwards;
         }
+        
+        .modal-text li:nth-child(1) { animation-delay: 0.1s; }
+        .modal-text li:nth-child(2) { animation-delay: 0.2s; }
+        .modal-text li:nth-child(3) { animation-delay: 0.3s; }
+        .modal-text li:nth-child(4) { animation-delay: 0.4s; }
+        .modal-text li:nth-child(5) { animation-delay: 0.5s; }
 
         .modal-text li:before {
             content: "✓";
@@ -375,7 +512,8 @@
             left: 0;
             color: #00ff00;
             font-weight: bold;
-            font-size: 16px;
+            font-size: 18px;
+            text-shadow: 0 0 10px rgba(0, 255, 0, 0.6);
         }
     </style>
 </head>
@@ -387,7 +525,7 @@
         </div>
         
         <div class="table-wrapper">
-            <div id="loading" class="loading">Caricamento...</div>
+            <div id="loading" class="loading">⚡ Caricamento...</div>
             <table id="spiritelli-table" style="display: none;">
                 <thead>
                     <tr>
@@ -405,7 +543,7 @@
     </div>
 
     <div class="button-container">
-        <button class="crea-immagine-btn" id="creaImmagineBtn">Crea Immagine</button>
+        <button class="crea-immagine-btn" id="creaImmagineBtn">✨ Crea Immagine ✨</button>
     </div>
 
     <div class="watermark">By Fortnite_Italia_Leaks<br>on Telegram</div>
@@ -421,8 +559,8 @@
                     <li>Premi su uno spiritello per indicarlo come posseduto</li>
                     <li>Premi una seconda volta per indicarlo come masterato</li>
                     <li>Premi una terza volta per toglierlo dalla collezione</li>
-                    <li>Premi "Crea Immagine" per creare un'immagine della tua collezione con posseduti e masterati selezionati in quel momento</li>
-                    <li>Per qualsiasi problema segnalare nel gruppo del bot con @admin</li>
+                    <li>Premi "Crea Immagine" per creare un'immagine della tua collezione</li>
+                    <li>Per qualsiasi problema segnalare nel gruppo del bot</li>
                 </ul>
             </div>
         </div>
@@ -439,7 +577,6 @@
         let collezione = [];
         let currentUser = null;
 
-        // ✅ MODAL HANDLING
         const infoBtn = document.getElementById('infoBtn');
         const infoModal = document.getElementById('infoModal');
         const closeModalBtn = document.getElementById('closeModalBtn');
@@ -498,8 +635,9 @@
             const tbody = document.getElementById('table-body');
             tbody.innerHTML = '';
 
-            spiritelli.forEach(function(spiritello) {
+            spiritelli.forEach(function(spiritello, idx) {
                 const row = document.createElement('tr');
+                row.style.animation = `slideInUp 0.5s ease-out ${0.1 + idx * 0.05}s backwards`;
                 row.innerHTML = '<td>' + spiritello + '</td>';
 
                 varianti.forEach(function(variante) {
@@ -536,7 +674,6 @@
             const eraAttivo = boxElement.classList.contains('active');
             const eraMastered = boxElement.classList.contains('mastered');
 
-            // ✅ CASO 3: Mastered (dorato) → Click → Elimina completamente
             if (eraMastered) {
                 boxElement.classList.remove('active', 'mastered');
                 boxElement.classList.add('pending');
@@ -554,11 +691,7 @@
                     });
 
                     if (!res.ok) {
-                        if (res.status === 429) {
-                            mostraErrore('Troppe modifiche veloci, rallenta un attimo');
-                        } else {
-                            mostraErrore('Errore nel salvataggio, riprova');
-                        }
+                        mostraErrore(res.status === 429 ? 'Troppo veloce! 🚀' : 'Errore nel salvataggio');
                         boxElement.classList.add('mastered');
                         return;
                     }
@@ -569,8 +702,7 @@
 
                     if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
                 } catch (e) {
-                    console.log("Errore rete: " + e.message);
-                    mostraErrore('Errore di connessione, riprova');
+                    mostraErrore('Errore di connessione');
                     boxElement.classList.add('mastered');
                 } finally {
                     boxElement.classList.remove('pending');
@@ -578,7 +710,6 @@
                 return;
             }
 
-            // ✅ CASO 2: Active (verde) + NON mastered → Click → Mastered (dorato)
             if (eraAttivo && !eraMastered) {
                 boxElement.classList.remove('active');
                 boxElement.classList.add('mastered', 'pending');
@@ -598,7 +729,7 @@
                     if (!res.ok) {
                         boxElement.classList.add('active');
                         boxElement.classList.remove('mastered');
-                        mostraErrore('Errore nel salvataggio, riprova');
+                        mostraErrore('Errore nel salvataggio');
                         return;
                     }
 
@@ -609,8 +740,7 @@
 
                     if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
                 } catch (e) {
-                    console.log("Errore rete: " + e.message);
-                    mostraErrore('Errore di connessione, riprova');
+                    mostraErrore('Errore di connessione');
                     boxElement.classList.add('active');
                     boxElement.classList.remove('mastered');
                 } finally {
@@ -619,7 +749,6 @@
                 return;
             }
 
-            // ✅ CASO 1: Nessuno → Click → Active (verde)
             boxElement.classList.add('active', 'pending');
 
             try {
@@ -635,11 +764,7 @@
                 });
 
                 if (!res.ok) {
-                    if (res.status === 429) {
-                        mostraErrore('Troppe modifiche veloci, rallenta un attimo');
-                    } else {
-                        mostraErrore('Errore nel salvataggio, riprova');
-                    }
+                    mostraErrore(res.status === 429 ? 'Troppo veloce! 🚀' : 'Errore nel salvataggio');
                     boxElement.classList.remove('active');
                     return;
                 }
@@ -652,8 +777,7 @@
 
                 if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
             } catch (e) {
-                console.log("Errore rete: " + e.message);
-                mostraErrore('Errore di connessione, riprova');
+                mostraErrore('Errore di connessione');
                 boxElement.classList.remove('active');
             } finally {
                 boxElement.classList.remove('pending');
@@ -663,7 +787,7 @@
         async function creaImmagine() {
             const btn = document.getElementById('creaImmagineBtn');
             btn.disabled = true;
-            btn.textContent = 'Creazione in corso...';
+            btn.textContent = '⏳ Creazione in corso...';
 
             try {
                 const container = document.getElementById('screenshot-container');
@@ -714,13 +838,13 @@
 
                 if (!res.ok) throw new Error('Errore invio');
                 
-                mostraSuccesso('✓ Screenshot inviato nella chat!');
+                mostraSuccesso('✅ Screenshot inviato nella chat!');
                 
             } catch (e) {
                 mostraErrore('Errore: ' + e.message);
             } finally {
                 btn.disabled = false;
-                btn.textContent = 'Crea Immagine';
+                btn.textContent = '✨ Crea Immagine ✨';
             }
         }
 
