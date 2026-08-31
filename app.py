@@ -68,7 +68,7 @@ def get_user_id():
 limiter = Limiter(
     key_func=get_user_id,
     app=app,
-    default_limits=["1000 per day", "200 per hour"],  # ← AUMENTATO
+    default_limits=["200 per day", "50 per hour"],
     storage_uri="memory://"
 )
 
@@ -212,31 +212,23 @@ def get_top_5_leaderboard():
     try:
         conn = get_db_connection()
         if not conn:
-            logger.error("❌ DB connection is None")
             return []
         
         c = conn.cursor()
-        # Query semplificata - prima conta i masterati manualmente
         c.execute("""
             SELECT 
-                c.user_id,
-                u.username,
-                COUNT(c.id) as totali,
-                COUNT(CASE WHEN c.mastered = true THEN 1 END) as masterati
-            FROM collezione c
-            LEFT JOIN utenti u ON c.user_id = u.user_id
-            GROUP BY c.user_id, u.username
+                user_id,
+                username,
+                COUNT(*) as totali,
+                SUM(CASE WHEN mastered = true THEN 1 ELSE 0 END) as masterati
+            FROM collezione
+            GROUP BY user_id, username
             ORDER BY masterati DESC
             LIMIT 5
         """)
         rows = c.fetchall()
-        logger.info(f"✅ Leaderboard: {len(rows)} rows returned")
         c.close()
         release_db_connection(conn)
-        
-        if not rows:
-            logger.warning("⚠️ No rows returned from leaderboard query")
-            return []
         
         return [
             {
@@ -248,7 +240,7 @@ def get_top_5_leaderboard():
             for r in rows
         ]
     except Exception as e:
-        logger.error(f"❌ Leaderboard error: {str(e)}", exc_info=True)
+        logger.error(f"Errore get_top_5: {str(e)}")
         return []
 
 # ==================== AUTENTICAZIONE ====================
@@ -480,11 +472,8 @@ def telegram_webhook():
         if update and "message" in update:
             message = update["message"]
             
-            logger.info(f"Message ricevuto completo: {json.dumps(message, indent=2)}")
-            logger.info(f"Campi presenti: {list(message.keys())}")
-            
             if not all(k in message for k in ["chat", "text"]):
-                logger.warning(f"Campi obbligatori mancanti - Presenti: {list(message.keys())}")
+                logger.warning(f"Campi obbligatori mancanti")
                 return jsonify({"status": "ok"}), 200
             
             text = message.get("text", "")
@@ -492,8 +481,6 @@ def telegram_webhook():
             message_id = message.get("message_id")
             user_id = message.get("from", {}).get("id")
             chat_type = message["chat"].get("type")
-            
-            logger.info(f"Parsing: text='{text}', chat_id={chat_id}, user_id={user_id}, chat_type={chat_type}")
             
             bot = Bot(token=BOT_TOKEN)
             
