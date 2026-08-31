@@ -529,11 +529,8 @@
             <div id="loading" class="loading">⚡ Caricamento...</div>
             <table id="spiritelli-table" style="display: none;">
                 <thead>
-                    <tr>
-                        <th>SPIRITELLO</th>
-                        <th>BASE</th>
-                        <th>ORO</th>
-                        <th>MAESTRO<br>DEI TRUCCHI</th>
+                    <tr id="header-row">
+                        <th style="width: 100px;">VARIANTE</th>
                     </tr>
                 </thead>
                 <tbody id="table-body"></tbody>
@@ -633,15 +630,34 @@
         }
 
         function renderTabella() {
+            const headerRow = document.getElementById('header-row');
             const tbody = document.getElementById('table-body');
             tbody.innerHTML = '';
-
-            spiritelli.forEach(function(spiritello, idx) {
+            
+            // Crea header con nomi spiritelli
+            spiritelli.forEach(function(spiritello) {
+                const th = document.createElement('th');
+                th.textContent = spiritello;
+                th.style.textAlign = 'center';
+                headerRow.appendChild(th);
+            });
+            
+            // Crea righe per ogni variante
+            varianti.forEach(function(variante, varIdx) {
                 const row = document.createElement('tr');
-                row.style.animation = `slideInUp 0.5s ease-out ${0.1 + idx * 0.05}s backwards`;
-                row.innerHTML = '<td>' + spiritello + '</td>';
-
-                varianti.forEach(function(variante) {
+                row.style.animation = `slideInUp 0.5s ease-out ${0.1 + varIdx * 0.1}s backwards`;
+                
+                // Prima colonna: nome variante
+                const varianteCell = document.createElement('td');
+                varianteCell.textContent = variante;
+                varianteCell.style.fontWeight = '600';
+                varianteCell.style.color = '#ff00ff';
+                varianteCell.style.textShadow = '0 0 10px rgba(255, 0, 255, 0.5)';
+                varianteCell.style.minWidth = '100px';
+                row.appendChild(varianteCell);
+                
+                // Celle per ogni spiritello
+                spiritelli.forEach(function(spiritello) {
                     const item = collezione.find(function(s) {
                         return s.spiritello === spiritello && s.variante === variante;
                     });
