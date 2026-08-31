@@ -328,7 +328,7 @@ async def rispondi_comando_spritebot(chat_id, message_id, user_id, bot):
     except Exception as e:
         logger.error(f"Errore invio messaggio: {str(e)}")
 
-async def rispondi_comando_stats(chat_id, user_id, bot):
+async def rispondi_comando_stats(chat_id, user_id, username, bot):
     """Risponde a /stats con le statistiche dell'utente"""
     
     stats = get_statistiche_utente(user_id)
@@ -340,7 +340,7 @@ async def rispondi_comando_stats(chat_id, user_id, bot):
             logger.error(f"Errore invio stats: {str(e)}")
         return
     
-    testo = f"""📊 **Le tue statistiche:**
+    testo = f"""📊 **Statistiche di {username}:**
 
 🎮 Spiritelli posseduti: **{stats['posseduti']}/{stats['totali']}**
 ⭐ Spiritelli masterati: **{stats['masterati']}/{stats['totali']}**
@@ -488,7 +488,8 @@ def telegram_webhook():
                 if chat_type == "group" or chat_type == "supergroup":
                     asyncio.run(rispondi_comando_spritebot(chat_id, message_id, user_id, bot))
             elif text.startswith("/stats"):
-                asyncio.run(rispondi_comando_stats(chat_id, user_id, bot))
+                username = message.get("from", {}).get("username", "Utente")
+                asyncio.run(rispondi_comando_stats(chat_id, user_id, username, bot))
             elif text.startswith("/leaderboard"):
                 asyncio.run(rispondi_comando_leaderboard(chat_id, bot))
             elif text.startswith("/mancanti"):
