@@ -87,12 +87,12 @@
             background: rgba(0, 0, 0, 0.6);
             backdrop-filter: blur(20px);
             border-radius: 20px;
-            overflow: hidden;
+            overflow-x: auto;
             box-shadow: 
                 0 0 60px rgba(255, 0, 255, 0.3),
                 0 0 120px rgba(0, 255, 255, 0.2),
                 inset 0 0 60px rgba(255, 0, 255, 0.05);
-            padding: 20px;
+            padding: 15px;
             border: 2px solid rgba(0, 255, 255, 0.3);
             margin-bottom: 30px;
             animation: slideInUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.4s backwards;
@@ -107,89 +107,67 @@
             border-color: rgba(0, 255, 255, 0.6);
         }
         
-        .grid-container {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 20px;
-            padding: 0;
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(10, 10, 40, 0.5);
         }
         
-        @media (max-width: 1200px) {
-            .grid-container {
-                grid-template-columns: repeat(3, 1fr);
-                gap: 18px;
-            }
+        thead {
+            background: linear-gradient(90deg, rgba(255, 0, 255, 0.15) 0%, rgba(0, 255, 255, 0.15) 100%);
+            border-bottom: 3px solid rgba(0, 255, 255, 0.4);
         }
         
-        @media (max-width: 768px) {
-            .grid-container {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 15px;
-            }
-        }
-        
-        .spirito-card {
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(20px);
-            border: 2px solid rgba(0, 255, 255, 0.4);
-            border-radius: 15px;
-            padding: 16px;
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            animation: slideInUp 0.5s ease-out;
-            box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
-        }
-        
-        .spirito-card:hover {
-            border-color: rgba(0, 255, 255, 0.8);
-            background: rgba(0, 0, 0, 0.8);
-            box-shadow: 0 0 50px rgba(0, 255, 255, 0.4), inset 0 0 30px rgba(0, 255, 255, 0.05);
-            transform: translateY(-8px);
-        }
-        
-        .spirito-name {
+        th {
+            padding: 18px 12px;
             text-align: center;
-            color: #ff00ff;
             font-weight: 700;
-            font-size: 16px;
-            margin-bottom: 14px;
-            text-shadow: 0 0 10px rgba(255, 0, 255, 0.6);
-            letter-spacing: 1px;
-        }
-        
-        .varianti-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 10px;
-        }
-        
-        .variante-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            background: rgba(255, 0, 255, 0.08);
-            padding: 8px;
-            border-radius: 8px;
-            transition: all 0.2s ease;
-        }
-        
-        .variante-row:hover {
-            background: rgba(255, 0, 255, 0.15);
-        }
-        
-        .variante-label {
             font-size: 12px;
-            font-weight: 600;
-            color: rgba(255, 255, 255, 0.8);
-            min-width: 60px;
+            color: #00ffff;
+            text-shadow: 0 0 15px rgba(0, 255, 255, 0.8);
+            height: 60px;
+            white-space: normal;
+            word-break: break-word;
+            vertical-align: middle;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+        }
+        
+        th:first-child {
             text-align: left;
         }
         
-        .sprite-box-grid {
-            width: 55px;
-            height: 55px;
+        td {
+            padding: 14px 8px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 0, 255, 0.08);
+            transition: all 0.2s ease;
+        }
+        
+        td:first-child {
+            text-align: left;
+            font-weight: 600;
+            min-width: 100px;
+            color: #ff00ff;
+            text-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
+        }
+        
+        tr {
+            transition: all 0.3s ease;
+        }
+        
+        tr:hover {
+            background: rgba(255, 0, 255, 0.12);
+            box-shadow: inset 0 0 20px rgba(0, 255, 255, 0.1);
+        }
+        
+        .sprite-box {
+            width: 65px;
+            height: 65px;
+            margin: 0 auto;
             background: rgba(0, 0, 0, 0.7);
             border: 2px solid rgba(0, 255, 255, 0.5);
-            border-radius: 10px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -197,11 +175,10 @@
             transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
             position: relative;
             overflow: hidden;
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
-            flex-shrink: 0;
+            box-shadow: 0 0 25px rgba(0, 255, 255, 0.2);
         }
         
-        .sprite-box-grid::before {
+        .sprite-box::before {
             content: '';
             position: absolute;
             top: 0;
@@ -212,53 +189,67 @@
             transition: left 0.5s ease;
         }
         
-        .sprite-box-grid:hover::before {
+        .sprite-box:hover::before {
             left: 100%;
         }
         
-        .sprite-box-grid:hover {
+        .sprite-box:hover {
             border-color: rgba(255, 0, 255, 0.8);
             background: rgba(255, 0, 255, 0.15);
-            transform: scale(1.1);
-            box-shadow: 0 0 35px rgba(255, 0, 255, 0.5);
-            filter: drop-shadow(0 0 10px rgba(255, 0, 255, 0.5));
+            transform: scale(1.08) translateY(-5px);
+            box-shadow: 
+                0 0 40px rgba(255, 0, 255, 0.6),
+                0 10px 30px rgba(255, 0, 255, 0.3);
+            filter: drop-shadow(0 0 15px rgba(255, 0, 255, 0.5));
         }
         
-        .sprite-box-grid img {
+        .sprite-box img {
             width: 100%;
             height: 100%;
             object-fit: contain;
-            padding: 3px;
+            padding: 4px;
             transition: all 0.3s ease;
         }
         
-        .sprite-box-grid:hover img {
+        .sprite-box:hover img {
             filter: brightness(1.2);
         }
         
-        .sprite-box-grid.active {
+        .sprite-box.active {
             background: linear-gradient(135deg, #00ff00 0%, #00cc00 100%);
             border-color: #00ff00;
-            box-shadow: 0 0 35px rgba(0, 255, 0, 0.8);
+            box-shadow: 
+                0 0 40px rgba(0, 255, 0, 0.8),
+                0 10px 30px rgba(0, 255, 0, 0.4),
+                inset 0 0 30px rgba(0, 255, 0, 0.2);
             animation: pulse 1.5s ease-in-out;
         }
         
-        .sprite-box-grid.active:hover {
-            box-shadow: 0 0 50px rgba(0, 255, 0, 1);
+        .sprite-box.active:hover {
+            box-shadow: 
+                0 0 60px rgba(0, 255, 0, 1),
+                0 15px 40px rgba(0, 255, 0, 0.5),
+                inset 0 0 30px rgba(0, 255, 0, 0.3);
         }
         
-        .sprite-box-grid.mastered {
+        .sprite-box.mastered {
             background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
             border-color: #FFD700;
-            box-shadow: 0 0 35px rgba(255, 215, 0, 0.8);
+            box-shadow: 
+                0 0 40px rgba(255, 215, 0, 0.8),
+                0 10px 30px rgba(255, 215, 0, 0.4),
+                inset 0 0 30px rgba(255, 215, 0, 0.2);
             animation: pulse 1.5s ease-in-out;
         }
         
-        .sprite-box-grid.mastered:hover {
-            box-shadow: 0 0 50px rgba(255, 215, 0, 1);
+        .sprite-box.mastered:hover {
+            box-shadow: 
+                0 0 60px rgba(255, 215, 0, 1),
+                0 15px 40px rgba(255, 215, 0, 0.5),
+                inset 0 0 30px rgba(255, 215, 0, 0.3);
         }
         
-        .sprite-box-grid.pending {
+        .sprite-box.pending {
             opacity: 0.6;
             cursor: wait;
             border-color: rgba(255, 255, 0, 0.6);
@@ -534,7 +525,14 @@
         
         <div class="table-wrapper">
             <div id="loading" class="loading">⚡ Caricamento...</div>
-            <div class="grid-container" id="spiritelli-grid" style="display: none;"></div>
+            <table id="spiritelli-table" style="display: none;">
+                <thead>
+                    <tr id="header-row">
+                        <th style="width: 100px;">SPIRITELLO</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body"></tbody>
+            </table>
         </div>
         
         <div id="error" class="error" style="display: none;"></div>
@@ -630,44 +628,42 @@
         }
 
         function renderTabella() {
-            const grid = document.getElementById('spiritelli-grid');
-            grid.innerHTML = '';
+            const headerRow = document.getElementById('header-row');
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
             
+            // Crea header con nomi varianti
+            varianti.forEach(function(variante) {
+                const th = document.createElement('th');
+                th.textContent = variante;
+                th.style.textAlign = 'center';
+                headerRow.appendChild(th);
+            });
+            
+            // Crea righe per ogni spiritello
             spiritelli.forEach(function(spiritello, spirIdx) {
-                // Card per ogni spiritello
-                const card = document.createElement('div');
-                card.className = 'spirito-card';
-                card.style.animationDelay = `${0.1 + spirIdx * 0.05}s`;
+                const row = document.createElement('tr');
+                row.style.animation = `slideInUp 0.5s ease-out ${0.1 + spirIdx * 0.05}s backwards`;
                 
-                // Nome spiritello
-                const name = document.createElement('div');
-                name.className = 'spirito-name';
-                name.textContent = spiritello;
-                card.appendChild(name);
+                // Prima colonna: nome spiritello
+                const spiritelloCell = document.createElement('td');
+                spiritelloCell.textContent = spiritello;
+                spiritelloCell.style.fontWeight = '600';
+                spiritelloCell.style.color = '#ff00ff';
+                spiritelloCell.style.textShadow = '0 0 10px rgba(255, 0, 255, 0.5)';
+                row.appendChild(spiritelloCell);
                 
-                // Grid varianti
-                const variantiGrid = document.createElement('div');
-                variantiGrid.className = 'varianti-grid';
-                
+                // Celle per ogni variante
                 varianti.forEach(function(variante) {
-                    const row = document.createElement('div');
-                    row.className = 'variante-row';
-                    
-                    // Label variante
-                    const label = document.createElement('div');
-                    label.className = 'variante-label';
-                    label.textContent = variante;
-                    row.appendChild(label);
-                    
-                    // Box spiritello
                     const item = collezione.find(function(s) {
                         return s.spiritello === spiritello && s.variante === variante;
                     });
                     const possiede = item !== undefined;
                     const mastered = possiede && item.mastered;
 
+                    const cell = document.createElement('td');
                     const box = document.createElement('div');
-                    box.className = 'sprite-box-grid' + (mastered ? ' mastered' : (possiede ? ' active' : ''));
+                    box.className = 'sprite-box' + (mastered ? ' mastered' : (possiede ? ' active' : ''));
                     box.onclick = function() { toggle(spiritello, variante, box); };
 
                     const img = document.createElement('img');
@@ -675,16 +671,15 @@
                     img.onerror = function() { img.style.display = 'none'; };
 
                     box.appendChild(img);
-                    row.appendChild(box);
-                    variantiGrid.appendChild(row);
+                    cell.appendChild(box);
+                    row.appendChild(cell);
                 });
-                
-                card.appendChild(variantiGrid);
-                grid.appendChild(card);
+
+                tbody.appendChild(row);
             });
 
             document.getElementById('loading').style.display = 'none';
-            document.getElementById('spiritelli-grid').style.display = 'grid';
+            document.getElementById('spiritelli-table').style.display = 'table';
         }
 
         async function toggle(spiritello, variante, boxElement) {
