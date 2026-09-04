@@ -74,7 +74,7 @@ limiter = Limiter(
 
 # ==================== COSTANTI ====================
 VARIANTI = ["Base", "Oro", "Maestro dei Trucchi"]
-SPIRITELLI = ["Sonic", "8-Bit", "Corona", "Cespuglio", "Klombo", "Tails", "Shadow", "Avventura", "Killswitch", "Jackrabbit", "Jonesy", "Tempesta"]
+SPIRITELLI = ["Sonic", "8-Bit", "Corona", "Cespuglio", "Klombo", "Tails", "Shadow", "Avventura", "Killswitch", "Jackrabbit", "Jonesy", "Tempesta", "X-Ray", "Onigiri", "Sovrascudo", "MegaMan"]
 INITDATA_EXPIRY = 3600
 
 # ==================== DATABASE ====================
@@ -200,8 +200,8 @@ def get_statistiche_utente(user_id):
         return {
             "posseduti": posseduti,
             "masterati": masterati,
-            "totali": 36,
-            "percentuale": round((posseduti / 36) * 100, 1)
+            "totali": 45,
+            "percentuale": round((posseduti / 45) * 100, 1)
         }
     except Exception as e:
         logger.error(f"Errore get_statistiche: {str(e)}")
@@ -369,7 +369,7 @@ async def rispondi_comando_leaderboard(chat_id, bot):
     testo = "🏆 **Top 5 utenti con più spiritelli masterati:**\n\n"
     
     for i, user in enumerate(top_5, 1):
-        testo += f"{i}. {user['username']} - ⭐ {user['masterati']}/36\n"
+        testo += f"{i}. {user['username']} - ⭐ {user['masterati']}/45\n"
     
     try:
         await bot.send_message(chat_id=chat_id, text=testo, parse_mode="Markdown")
@@ -399,7 +399,7 @@ async def rispondi_comando_mancanti(chat_id, user_id, username, bot):
     try:
         # Crea messaggio di testo con emoji
         testo = f"🔍 **Spiritelli Mancanti di @{username}**\n\n"
-        testo += f"📊 Mancanti: **{len(mancanti)}/36** spiritelli\n\n"
+        testo += f"📊 Mancanti: **{len(mancanti)}/45** spiritelli\n\n"
         
         current_spiritello = None
         for spiritello, variante in mancanti:
