@@ -473,10 +473,14 @@ def telegram_webhook():
             message = update["message"]
             
             if not all(k in message for k in ["chat", "text"]):
-                logger.warning(f"Campi obbligatori mancanti")
                 return jsonify({"status": "ok"}), 200
             
             text = message.get("text", "")
+            
+            # ✅ IGNORA messaggi che non sono comandi
+            if not text.startswith("/"):
+                return jsonify({"status": "ok"}), 200
+            
             chat_id = message["chat"].get("id")
             message_id = message.get("message_id")
             user_id = message.get("from", {}).get("id")
