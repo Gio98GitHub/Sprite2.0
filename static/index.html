@@ -820,8 +820,14 @@
                 const originalOverflow = tableWrapper.style.overflow;
                 const originalWidth = table.style.width;
                 const originalDisplay = table.style.display;
+                const originalContainerWidth = container.style.width;
+                const originalContainerMaxWidth = container.style.maxWidth;
                 
-                // 🖼️ LAYOUT SCREENSHOT: 2 colonne compatte (50% di larghezza)
+                // 🖼️ FORZA RISOLUZIONE: 1080px larghezza (standard)
+                container.style.width = '1080px';
+                container.style.maxWidth = '1080px';
+                
+                // Layout compatto: 2 colonne
                 tableWrapper.style.overflow = 'visible';
                 table.style.width = '50%';
                 table.style.display = 'inline-block';
@@ -841,14 +847,18 @@
                 
                 container.appendChild(watermark);
                 
+                // Cattura con dimensione fissa
                 const canvas = await html2canvas(container, {
                     backgroundColor: null,
                     scale: 1,
                     useCORS: true,
-                    allowTaint: true
+                    allowTaint: true,
+                    width: 1080  // ← Forza larghezza
                 });
                 
                 // ✅ RIPRISTINA lo stato originale subito
+                container.style.width = originalContainerWidth;
+                container.style.maxWidth = originalContainerMaxWidth;
                 tableWrapper.style.overflow = originalOverflow;
                 table.style.width = originalWidth;
                 table.style.display = originalDisplay;
