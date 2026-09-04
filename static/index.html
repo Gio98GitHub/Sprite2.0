@@ -798,69 +798,73 @@
             }
         }
 
-        async function creaImmagine() {
-            const btn = document.getElementById('creaImmagineBtn');
-            btn.disabled = true;
-            btn.textContent = '⏳ Creazione in corso...';
+async function creaImmagine() {
+    const btn = document.getElementById('creaImmagineBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Creazione in corso...';
 
-            try {
-                const container = document.getElementById('screenshot-container');
-                const tableWrapper = document.querySelector('.table-wrapper');
-                
-                const originalOverflow = tableWrapper.style.overflow;
-                const originalMaxHeight = tableWrapper.style.maxHeight;
-                
-                tableWrapper.style.overflow = 'visible';
-                tableWrapper.style.maxHeight = 'none';
-                
-                const originalBg = container.style.background;
-                container.style.background = "url('/static/background.png') center/cover no-repeat";
-                
-                const watermark = document.createElement('div');
-                watermark.style.textAlign = 'center';
-                watermark.style.marginTop = '20px';
-                watermark.style.fontSize = '12px';
-                watermark.style.color = 'rgba(0, 255, 255, 0.8)';
-                watermark.style.fontFamily = 'Fredoka, sans-serif';
-                watermark.style.textShadow = '0 0 5px rgba(0, 255, 255, 0.5)';
-                watermark.textContent = 'By Fortnite_Italia_Leaks on Telegram';
-                
-                container.appendChild(watermark);
-                
-                const canvas = await html2canvas(container, {
-                    backgroundColor: null,
-                    scale: 1,
-                    useCORS: true,
-                    allowTaint: true
-                });
-                
-                tableWrapper.style.overflow = originalOverflow;
-                tableWrapper.style.maxHeight = originalMaxHeight;
-                container.style.background = originalBg;
-                container.removeChild(watermark);
-                
-                const imageData = canvas.toDataURL('image/png');
-                
-                const res = await fetch('/api/invia-screenshot', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        screenshot: imageData,
-                        initData: tg.initData || initData
-                    })
-                });
+    try {
+        const container = document.getElementById('screenshot-container');
+        const tableWrapper = document.querySelector('.table-wrapper');
+        const table = document.getElementById('spiritelli-table');
+        
+        // ✅ Salva lo stato originale
+        const originalOverflow = tableWrapper.style.overflow;
+        const originalWidth = table.style.width;
+        
+        // ✅ Forza la tabella a mostrare tutto senza scroll
+        tableWrapper.style.overflow = 'visible';
+        table.style.width = 'auto';
+        
+        const originalBg = container.style.background;
+        container.style.background = "url('/static/background.png') center/cover no-repeat";
+        
+        const watermark = document.createElement('div');
+        watermark.style.textAlign = 'center';
+        watermark.style.marginTop = '20px';
+        watermark.style.fontSize = '12px';
+        watermark.style.color = 'rgba(0, 255, 255, 0.8)';
+        watermark.style.fontFamily = 'Fredoka, sans-serif';
+        watermark.style.textShadow = '0 0 5px rgba(0, 255, 255, 0.5)';
+        watermark.textContent = 'By Fortnite_Italia_Leaks on Telegram';
+        
+        container.appendChild(watermark);
+        
+        const canvas = await html2canvas(container, {
+            backgroundColor: null,
+            scale: 1,
+            useCORS: true,
+            allowTaint: true
+        });
+        
+        // ✅ Ripristina lo stato originale
+        tableWrapper.style.overflow = originalOverflow;
+        table.style.width = originalWidth;
+        container.style.background = originalBg;
+        container.removeChild(watermark);
+        
+        const imageData = canvas.toDataURL('image/png');
+        
+        const res = await fetch('/api/invia-screenshot', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                screenshot: imageData,
+                initData: tg.initData || initData
+            })
+        });
 
-                if (!res.ok) throw new Error('Errore invio');
-                
-                mostraSuccesso('✅ Screenshot inviato nella chat!');
-                
-            } catch (e) {
-                mostraErrore('Errore: ' + e.message);
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '✨ Crea Immagine ✨';
-            }
-        }
+        if (!res.ok) throw new Error('Errore invio');
+        
+        mostraSuccesso('✅ Screenshot inviato nella chat!');
+        
+    } catch (e) {
+        mostraErrore('Errore: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '✨ Crea Immagine ✨';
+    }
+}
 
         function mostraErrore(msg) {
             const errorDiv = document.getElementById('error');
