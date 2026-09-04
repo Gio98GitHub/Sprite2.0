@@ -814,12 +814,18 @@
             try {
                 const container = document.getElementById('screenshot-container');
                 const tableWrapper = document.querySelector('.table-wrapper');
+                const table = document.getElementById('spiritelli-table');
                 
+                // ✅ Salva lo stato originale
                 const originalOverflow = tableWrapper.style.overflow;
-                const originalMaxHeight = tableWrapper.style.maxHeight;
+                const originalWidth = table.style.width;
+                const originalDisplay = table.style.display;
                 
+                // 🖼️ LAYOUT SCREENSHOT: 2 colonne compatte (50% di larghezza)
                 tableWrapper.style.overflow = 'visible';
-                tableWrapper.style.maxHeight = 'none';
+                table.style.width = '50%';
+                table.style.display = 'inline-block';
+                table.style.verticalAlign = 'top';
                 
                 const originalBg = container.style.background;
                 container.style.background = "url('/static/background.png') center/cover no-repeat";
@@ -842,8 +848,11 @@
                     allowTaint: true
                 });
                 
+                // ✅ RIPRISTINA lo stato originale subito
                 tableWrapper.style.overflow = originalOverflow;
-                tableWrapper.style.maxHeight = originalMaxHeight;
+                table.style.width = originalWidth;
+                table.style.display = originalDisplay;
+                table.style.verticalAlign = 'initial';
                 container.style.background = originalBg;
                 container.removeChild(watermark);
                 
