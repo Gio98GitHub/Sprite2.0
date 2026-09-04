@@ -540,6 +540,7 @@
 
     <div class="button-container">
         <button class="crea-immagine-btn" id="creaImmagineBtn">✨ Crea Immagine ✨</button>
+        <button class="crea-immagine-btn" id="screenshotMancanti" style="background: linear-gradient(135deg, #ff6600 0%, #ff3300 100%); border-color: #ff6600; margin-top: 10px;">🔍 Screenshot Mancanti 🔍</button>
     </div>
 
     <div class="watermark">By Fortnite_Italia_Leaks<br>on Telegram</div>
@@ -806,7 +807,110 @@
             }
         }
 
-        async function creaImmagine() {
+        async function screenshotMancanti() {
+            const btn = document.getElementById('screenshotMancanti');
+            btn.disabled = true;
+            btn.textContent = '⏳ Creazione in corso...';
+
+            try {
+                const container = document.getElementById('screenshot-container');
+                const tableWrapper = document.querySelector('.table-wrapper');
+                const table = document.getElementById('spiritelli-table');
+                const rows = table.querySelectorAll('tbody tr');
+                
+                // ✅ Salva lo stato originale
+                const originalOverflow = tableWrapper.style.overflow;
+                const originalWidth = table.style.width;
+                const originalDisplay = table.style.display;
+                const originalContainerWidth = container.style.width;
+                const originalContainerMaxWidth = container.style.maxWidth;
+                const hiddenBoxes = [];
+                
+                // 🖼️ NASCONDI tutti i riquadri posseduti e masterati
+                rows.forEach(function(row) {
+                    const boxes = row.querySelectorAll('.sprite-box');
+                    boxes.forEach(function(box) {
+                        if (box.classList.contains('active') || box.classList.contains('mastered')) {
+                            box.style.visibility = 'hidden';
+                            box.style.opacity = '0';
+                            hiddenBoxes.push(box);
+                        }
+                    });
+                });
+                
+                // Forza risoluzione: 1080px larghezza
+                container.style.width = '1080px';
+                container.style.maxWidth = '1080px';
+                
+                // Layout compatto: 2 colonne
+                tableWrapper.style.overflow = 'visible';
+                table.style.width = '50%';
+                table.style.display = 'inline-block';
+                table.style.verticalAlign = 'top';
+                
+                const originalBg = container.style.background;
+                container.style.background = "url('/static/background.png') center/cover no-repeat";
+                
+                const watermark = document.createElement('div');
+                watermark.style.textAlign = 'center';
+                watermark.style.marginTop = '20px';
+                watermark.style.fontSize = '12px';
+                watermark.style.color = 'rgba(0, 255, 255, 0.8)';
+                watermark.style.fontFamily = 'Fredoka, sans-serif';
+                watermark.style.textShadow = '0 0 5px rgba(0, 255, 255, 0.5)';
+                watermark.textContent = 'By Fortnite_Italia_Leaks on Telegram';
+                
+                container.appendChild(watermark);
+                
+                // Cattura con dimensione fissa
+                const canvas = await html2canvas(container, {
+                    backgroundColor: null,
+                    scale: 1,
+                    useCORS: true,
+                    allowTaint: true,
+                    width: 1080
+                });
+                
+                // ✅ RIPRISTINA lo stato originale subito
+                container.style.width = originalContainerWidth;
+                container.style.maxWidth = originalContainerMaxWidth;
+                tableWrapper.style.overflow = originalOverflow;
+                table.style.width = originalWidth;
+                table.style.display = originalDisplay;
+                table.style.verticalAlign = 'initial';
+                container.style.background = originalBg;
+                container.removeChild(watermark);
+                
+                // Mostra di nuovo i riquadri nascosti
+                hiddenBoxes.forEach(function(box) {
+                    box.style.visibility = 'visible';
+                    box.style.opacity = '1';
+                });
+                
+                const imageData = canvas.toDataURL('image/png');
+                
+                const res = await fetch('/api/invia-screenshot', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        screenshot: imageData,
+                        initData: tg.initData || initData
+                    })
+                });
+
+                if (!res.ok) throw new Error('Errore invio');
+                
+                mostraSuccesso('✅ Screenshot mancanti inviato nella chat!');
+                
+            } catch (e) {
+                mostraErrore('Errore: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔍 Screenshot Mancanti 🔍';
+            }
+        }
+
+        
             const btn = document.getElementById('creaImmagineBtn');
             btn.disabled = true;
             btn.textContent = '⏳ Creazione in corso...';
@@ -912,6 +1016,7 @@
         }
 
         document.getElementById('creaImmagineBtn').addEventListener('click', creaImmagine);
+        document.getElementById('screenshotMancanti').addEventListener('click', screenshotMancanti);
 
         carica();
     </script>
